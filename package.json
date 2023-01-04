@@ -1,0 +1,17 @@
+{
+  "scripts": {
+    "serve": "vite --port 8080",
+    "deploy": "hardhat deploy --network localhost",
+    "reset-deploy": "hardhat deploy --network localhost --reset"
+  },
+  "dependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
+    "@openzeppelin/contracts": "^4.8.0",
+    "@vitejs/plugin-react": "^3.0.0",
+    "hardhat": "^2.12.4",
+    "hardhat-deploy": "^0.11.22",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.4.5"
+  }
+}

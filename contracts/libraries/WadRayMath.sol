@@ -134,8 +134,6 @@ library WadRayMath {
             }
         }
     }
-<<<<<<< HEAD
-=======
 
     function rayPow(uint256 x, uint256 n) internal pure returns (uint256 z) {
         z = n % 2 != 0 ? x : RAY;
@@ -147,5 +145,4 @@ library WadRayMath {
             }
         }
     }
->>>>>>> 8368816306b1009bc08570c56343b91039488f15
 }

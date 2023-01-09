@@ -52,10 +52,6 @@ library LibFacet {
     }
 
     struct InterestRate {
-<<<<<<< HEAD
-        uint256 utilisationRate;
-=======
->>>>>>> 8368816306b1009bc08570c56343b91039488f15
         uint256 targetUtilisationRate;
         uint256 interestRateSlopeBelow; // constant representing the scaling of the interest rate vs the utilization.
         uint256 interestRateSlopeAbove;

@@ -49,11 +49,7 @@ contract LendingPoolCore {
             pool.totalLiquidity >= _amount,
             "Pool does not have enough resources at the current moment."
         );
-<<<<<<< HEAD
-        updatePoolIndexes(pool);
-=======
         updateCumulativeIndexes(pool);
->>>>>>> 8368816306b1009bc08570c56343b91039488f15
         uint256 ethAmount = getEthValue(_pool, _amount);
         require(
             getHealthFactor(
@@ -66,7 +62,7 @@ contract LendingPoolCore {
         pool.user[_user].collateralEthBalance -= ethAmount;
         pool.user[_user].liquidityProvided -= _amount;
         pool.totalLiquidity -= _amount;
-        updatePoolRates(pool);
+        updatePoolInterestRates(pool);
         if (_pool == LibFacet.facetStorage().ethAddress) {
             (bool success, ) = _user.call{value: _amount}("");
             require(success, "Error transfering ETH.");
@@ -90,181 +86,99 @@ contract LendingPoolCore {
 
     function updatePoolOnDeposit(address _pool, uint256 _amount) internal {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
-<<<<<<< HEAD
-        updatePoolIndexes(pool);
-=======
         updateCumulativeIndexes(pool);
->>>>>>> 8368816306b1009bc08570c56343b91039488f15
         pool.totalLiquidity += _amount;
-        updatePoolRates(pool);
-        pool.lastUpdatedTimestamp = block.timestamp;
+        updatePoolInterestRates(pool);
         pool.user[msg.sender].liquidityProvided += _amount;
     }
 
-<<<<<<< HEAD
-    function updatePoolIndexes(LibFacet.Pool storage _pool) internal {
-        uint256 yearlyPeriod = getYearlyPeriod(
-            block.timestamp,
-            _pool.lastUpdatedTimestamp,
-            LibFacet.lpcStorage().SECONDS_IN_YEAR
-        );
-        _pool.reserveNormalizedIncome = WadRayMath.rayMul(
-            WadRayMath.rayMul(_pool.rates.currentLiquidityRate, yearlyPeriod) +
-                1,
-            _pool.cumulatedLiquidityIndex
-        );
-        _pool.cumulatedLiquidityIndex = WadRayMath.rayMul(
-            WadRayMath.rayMul(_pool.rates.currentLiquidityRate, yearlyPeriod) +
-                1,
-            _pool.cumulatedLiquidityIndex
-        );
-        _pool.cumulatedVariableBorrowIndex = WadRayMath.rayMul(
-            (1 +
-                WadRayMath.rayDiv(
-                    _pool.rates.variableBorrowRate,
-                    LibFacet.lpcStorage().SECONDS_IN_YEAR
-                ))**(block.timestamp - _pool.lastUpdatedTimestamp),
-            _pool.cumulatedVariableBorrowIndex
-        );
-        for (uint256 i = 0; i < _pool.users.length; i++) {
-            _pool.user[_pool.users[i]].compoundedBorrowBalance = WadRayMath
-                .rayMul(
-                    (
-                        WadRayMath.rayMul(
-                            WadRayMath.rayDiv(
-                                _pool.cumulatedVariableBorrowIndex,
-                                _pool
-                                    .user[_pool.users[i]]
-                                    .cumulatedVariableBorrowIndex
-                            ),
-                            (1 +
-                                WadRayMath.rayDiv(
-                                    _pool.rates.variableBorrowRate,
-                                    LibFacet.lpcStorage().SECONDS_IN_YEAR
-                                ))
-                        )
-                    )**(block.timestamp - _pool.lastUpdatedTimestamp),
-                    _pool.user[_pool.users[i]].principalBorrowBalance
-                );
-            _pool.user[_pool.users[i]].cumulatedVariableBorrowIndex = WadRayMath
-                .rayMul(
-                    (1 +
-                        WadRayMath.rayDiv(
-                            _pool.rates.variableBorrowRate,
-                            LibFacet.lpcStorage().SECONDS_IN_YEAR
-                        ))**(block.timestamp - _pool.lastUpdatedTimestamp),
-                    _pool.user[_pool.users[i]].cumulatedVariableBorrowIndex
-                );
-            _pool.user[_pool.users[i]].healthFactor = getHealthFactor(
-                _pool.user[_pool.users[i]].collateralEthBalance,
-                _pool.user[_pool.users[i]].liquidationThreshold,
-                _pool.user[_pool.users[i]].compoundedBorrowBalance
-            );
+    function updateCumulativeIndexes(LibFacet.Pool storage _pool) internal {
+        if (_pool.totalBorrowedLiquidity > 0) {
+            _pool.cumulatedLiquidityIndex = calculateLinearInterest(
+                _pool.rates.currentLiquidityRate,
+                _pool.lastUpdatedTimestamp
+            ).rayMul(_pool.cumulatedLiquidityIndex);
+            _pool.cumulatedVariableBorrowIndex = calculateCompoundedInterest(
+                _pool.rates.variableBorrowRate,
+                LibFacet.lpcStorage().SECONDS_IN_YEAR,
+                block.timestamp,
+                _pool.lastUpdatedTimestamp
+            ).rayMul(_pool.cumulatedVariableBorrowIndex);
         }
     }
 
-    function updatePoolRates(LibFacet.Pool storage _pool) internal {
-=======
-    function updateCumulativeIndexes(LibFacet.Pool storage _pool) internal {
-        // do all this only if totalBorrows > 0
-        _pool.cumulatedLiquidityIndex = calculateCumulatedLiquidityInterest(
-            _pool.rates.currentLiquidityRate,
-            _pool.lastUpdatedTimestamp
-        ).rayMul(_pool.cumulatedLiquidityIndex);
-        _pool
-            .cumulatedVariableBorrowIndex = calculateCumulatedVariableBorrowInterest(
-            _pool.rates.variableBorrowRate,
-            LibFacet.lpcStorage().SECONDS_IN_YEAR,
-            block.timestamp,
-            _pool.lastUpdatedTimestamp
-        ).rayMul(_pool.cumulatedVariableBorrowIndex);
-
-        //_pool.reserveNormalizedIncome = WadRayMath.rayMul(
-        //    WadRayMath.rayMul(_pool.rates.currentLiquidityRate, yearlyPeriod) +
-        //        1,
-        //    _pool.cumulatedLiquidityIndex
-        //);
-        //for (uint256 i = 0; i < _pool.users.length; i++) {
-        //    _pool.user[_pool.users[i]].compoundedBorrowBalance = WadRayMath
-        //        .rayMul(
-        //            (
-        //                WadRayMath.rayMul(
-        //                    WadRayMath.rayDiv(
-        //                        _pool.cumulatedVariableBorrowIndex,
-        //                        _pool
-        //                            .user[_pool.users[i]]
-        //                            .cumulatedVariableBorrowIndex
-        //                    ),
-        //                    (1 +
-        //                        WadRayMath.rayDiv(
-        //                            _pool.rates.variableBorrowRate,
-        //                            LibFacet.lpcStorage().SECONDS_IN_YEAR
-        //                        ))
-        //                )
-        //            )**(block.timestamp - _pool.lastUpdatedTimestamp),
-        //            _pool.user[_pool.users[i]].principalBorrowBalance
-        //        );
-        //    _pool.user[_pool.users[i]].cumulatedVariableBorrowIndex = WadRayMath
-        //        .rayMul(
-        //            (1 +
-        //                WadRayMath.rayDiv(
-        //                    _pool.rates.variableBorrowRate,
-        //                    LibFacet.lpcStorage().SECONDS_IN_YEAR
-        //                ))**(block.timestamp - _pool.lastUpdatedTimestamp),
-        //            _pool.user[_pool.users[i]].cumulatedVariableBorrowIndex
-        //        );
-        //    _pool.user[_pool.users[i]].healthFactor = getHealthFactor(
-        //        _pool.user[_pool.users[i]].collateralEthBalance,
-        //        _pool.user[_pool.users[i]].liquidationThreshold,
-        //        _pool.user[_pool.users[i]].compoundedBorrowBalance
-        //    );
-        //}
-    }
-
     function updatePoolInterestRates(LibFacet.Pool storage _pool) internal {
->>>>>>> 8368816306b1009bc08570c56343b91039488f15
-        _pool.rates.utilisationRate =
-            _pool.totalBorrowedLiquidity /
-            _pool.totalLiquidity;
-        _pool.rates.variableBorrowRate = _pool.rates.utilisationRate <=
+        (
+            _pool.rates.variableBorrowRate,
+            _pool.rates.currentLiquidityRate
+        ) = calculateInterestRates(
+            _pool.totalLiquidity,
+            _pool.totalVariableBorrowLiquidity,
+            _pool.rates.interestRateSlopeBelow,
+            _pool.rates.interestRateSlopeAbove,
+            _pool.rates.baseVariableBorrowRate,
             _pool.rates.targetUtilisationRate
-            ? _pool.rates.baseVariableBorrowRate +
-                WadRayMath.rayMul(
-                    (_pool.rates.utilisationRate /
-                        _pool.rates.targetUtilisationRate),
-                    _pool.rates.interestRateSlopeBelow
-                )
-            : _pool.rates.baseVariableBorrowRate +
-                _pool.rates.interestRateSlopeBelow +
-                WadRayMath.rayMul(
-                    ((_pool.rates.utilisationRate -
-                        _pool.rates.targetUtilisationRate) /
-                        (1 - _pool.rates.targetUtilisationRate)),
-                    _pool.rates.interestRateSlopeAbove
-                );
-        _pool.rates.overallBorrowRate = _pool.totalBorrowedLiquidity == 0
-            ? 0
-            : WadRayMath.rayDiv(
-                WadRayMath.rayMul(
-                    _pool.rates.variableBorrowRate,
-                    _pool.totalVariableBorrowLiquidity
-                ),
-                _pool.totalBorrowedLiquidity
-            );
-        _pool.rates.currentLiquidityRate = WadRayMath.rayMul(
-            _pool.rates.overallBorrowRate,
-            _pool.rates.utilisationRate
         );
-<<<<<<< HEAD
-    }
-
-    function test(address _pool) external view returns (uint256) {
-        return LibFacet.lpcStorage().pools[_pool].totalLiquidity;
-=======
         _pool.lastUpdatedTimestamp = block.timestamp;
     }
 
-    function calculateCumulatedVariableBorrowInterest(
+    function calculateInterestRates(
+        uint256 _totalLiquidity,
+        uint256 _totalVariableBorrows,
+        uint256 _variableRateSlope1,
+        uint256 _VariableRateSlope2,
+        uint256 _baseVariableBorrowRate,
+        uint256 _optimalUtilizationRate
+    )
+        internal
+        view
+        returns (
+            uint256 currentVariableBorrowRate,
+            uint256 currentLiquidityRate
+        )
+    {
+        uint256 totalBorrows = _totalVariableBorrows; /// @dev + totalStableBorrows
+        uint256 utilizationRate = (_totalLiquidity == 0 && totalBorrows == 0)
+            ? 0
+            : totalBorrows / _totalLiquidity;
+        if (utilizationRate > _optimalUtilizationRate) {
+            uint256 excessUtilizationRateRatio = (utilizationRate -
+                _optimalUtilizationRate).rayDiv(1 - _optimalUtilizationRate);
+            currentVariableBorrowRate =
+                _baseVariableBorrowRate +
+                _variableRateSlope1 +
+                (_VariableRateSlope2.rayMul(excessUtilizationRateRatio));
+        } else {
+            currentVariableBorrowRate =
+                _baseVariableBorrowRate +
+                (
+                    utilizationRate.rayDiv(_optimalUtilizationRate).rayMul(
+                        _variableRateSlope1
+                    )
+                );
+        }
+        currentLiquidityRate = calculateOverallBorrowRate(
+            _totalVariableBorrows,
+            currentVariableBorrowRate
+        );
+    }
+
+    function calculateOverallBorrowRate(
+        uint256 _totalVariableBorrows,
+        uint256 _currentVariableBorrowRate
+    ) internal pure returns (uint256) {
+        uint256 totalBorrows = _totalVariableBorrows; /// TODO: + _totalStableBorrows
+        if (totalBorrows == 0) return 0;
+
+        uint256 weightedVariableRate = _totalVariableBorrows.wadToRay().rayDiv(
+            _currentVariableBorrowRate
+        );
+
+        return weightedVariableRate.rayDiv(totalBorrows.wadToRay());
+    }
+
+    /// @dev calculates interest using compounded interest rate formula
+    function calculateCompoundedInterest(
         uint256 _variableBorrowRate,
         uint256 _secondsInAYear,
         uint256 _timestamp,
@@ -276,33 +190,27 @@ contract LendingPoolCore {
             (WadRayMath.RAY.rayPow(_timestamp - _lastUpdatedTimestamp));
     }
 
-    function calculateCumulatedLiquidityInterest(
+    /// @dev calculates interest using linear interest rate formula
+    function calculateLinearInterest(
         uint256 _currentLiquidityRate,
         uint256 _lastUpdatedTimestamp
     ) internal view returns (uint256) {
-        uint256 yearlyPeriod = getYearlyPeriod(
+        uint256 timeDelta = calculateTimeDelta(
             block.timestamp,
             _lastUpdatedTimestamp,
             LibFacet.lpcStorage().SECONDS_IN_YEAR
         );
-        return _currentLiquidityRate.rayMul(yearlyPeriod) + WadRayMath.RAY;
->>>>>>> 8368816306b1009bc08570c56343b91039488f15
+        return _currentLiquidityRate.rayMul(timeDelta) + WadRayMath.RAY;
     }
 
-    function getYearlyPeriod(
+    function calculateTimeDelta(
         uint256 _timestamp,
         uint256 _lastUpdatedTimestamp,
         uint256 _secondsInAYear
     ) internal pure returns (uint256) {
         return
-<<<<<<< HEAD
-            WadRayMath.wadDiv(
-                WadRayMath.WAD * (_timestamp - _lastUpdatedTimestamp),
-                _secondsInAYear
-=======
             (_timestamp - _lastUpdatedTimestamp).wadToRay().rayDiv(
                 _secondsInAYear.wadToRay()
->>>>>>> 8368816306b1009bc08570c56343b91039488f15
             );
     }
 
@@ -312,12 +220,7 @@ contract LendingPoolCore {
         uint256 _compoundedBorrowBalance
     ) internal pure returns (uint256) {
         return
-<<<<<<< HEAD
-            WadRayMath.rayDiv(
-                WadRayMath.rayMul(_collateralEth, _liquidationThreshold),
-=======
             _collateralEth.rayMul(_liquidationThreshold).rayDiv(
->>>>>>> 8368816306b1009bc08570c56343b91039488f15
                 _compoundedBorrowBalance
             );
     }

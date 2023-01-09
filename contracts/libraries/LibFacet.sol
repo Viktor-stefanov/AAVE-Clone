@@ -7,26 +7,30 @@ library LibFacet {
     bytes32 constant FACET_STORAGE_POSITION =
         keccak256("diamonds.standart.facet.storage");
 
-    // user data tied to his deposit
+    // user data tied to a specific pool
     struct UserPoolData {
         uint256 liquidityProvided;
         uint256 principalBorrowBalance;
-        uint256 cumulatedVariableBorrowIndex; // interest cumulated by the variable borrows of the specific user
-        uint256 compoundedBorrowBalance; // princialBorrowBalance + cumulatedVariableBorrowIndex
+        uint256 cumulatedVariableBorrowIndex;
+        uint256 compoundedBorrowBalance;
         uint256 collateralEthBalance;
         uint256 liquidationThreshold;
         uint256 originationFee;
         uint256 healthFactor;
+        uint256 lastUpdatedTimestamp;
+        bool useAsCollateral;
+        UserInterestRate rates;
     }
 
     struct Pool {
+        uint256 decimals;
         uint256 totalLiquidity;
         uint256 totalBorrowedLiquidity;
         uint256 totalVariableBorrowLiquidity;
-        uint256 depositApy; // utilisation rate * (share of variable borrows * variable rate)
         uint256 cumulatedLiquidityIndex; // interest cumulated by the reserve during the time interval Dt
         uint256 reserveNormalizedIncome; // Ongoing interest cumulated by the reserve
         uint256 cumulatedVariableBorrowIndex;
+        uint256 baseLTV;
         uint256 loanToValue; // weighted average of the LTVs of the currencies making up the reserve
         uint256 liquidationThreshold;
         uint256 liquidationBonus; // represented in percentage
@@ -49,6 +53,7 @@ library LibFacet {
     struct FacetStorage {
         address ethAddress;
         address lpcAddress;
+        address dataFeedAddress;
     }
 
     struct InterestRate {
@@ -61,9 +66,21 @@ library LibFacet {
         uint256 currentLiquidityRate; // overallBorrowRate * utilizationRate
     }
 
+    struct UserInterestRate {
+        uint256 variableBorrowRate;
+        uint256 stableBorrowRate;
+        uint256 cumulatedVariableBorrowIndex;
+    }
+
     enum TokenVolatility {
-        low,
-        high
+        LOW,
+        HIGH
+    }
+
+    enum InterestRateMode {
+        VARIABLE,
+        STABLE,
+        NONE
     }
 
     struct InterestRateStorage {

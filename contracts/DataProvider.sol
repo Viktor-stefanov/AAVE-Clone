@@ -60,9 +60,9 @@ contract DataProvider {
             ) = core.getPoolConfiguration(pools[poolIdx]);
 
             vars.tokenUnit = 10**vars.reserveDecimals;
-            vars.poolUnitPrice = PriceFeed(
-                LibFacet.facetStorage().dataFeedAddress
-            ).getAssetPrice(pools[poolIdx]);
+            vars.poolUnitPrice = LibFacet.getPriceFeed().getAssetPrice(
+                pools[poolIdx]
+            );
 
             if (vars.compoundedLiquidityBalance > 0) {
                 vars.liquidityBalanceETH =
@@ -112,11 +112,30 @@ contract DataProvider {
         uint256 _totalBorrowBalanceETH,
         uint256 _totalFeesETH,
         uint256 _currentLiquidationThreshold
-    ) internal view returns (uint256) {
+    ) internal pure returns (uint256) {
         if (_totalBorrowBalanceETH == 0) return uint256(0);
 
         return
             ((_totalCollateralBalanceETH * _currentLiquidationThreshold) / 100)
                 .wadDiv(_totalBorrowBalanceETH + _totalFeesETH);
+    }
+
+    function calculateCollateralNeededInETH(
+        address _pool,
+        uint256 _amount,
+        uint256 _fee,
+        uint256 _userCurrentBorrowBalanceETH,
+        uint256 _userCurrentFeesETH,
+        uint256 _userCurrentLTV
+    ) external view returns (uint256 collateralNeededInETH) {
+        PriceFeed pf = LibFacet.getPriceFeed();
+        uint256 poolDecimals = LibFacet.getCore().getPoolDecimals(_pool);
+        uint256 requestedBorrowAmountETH = (pf.getAssetPrice(_pool) *
+            (_amount + _fee)) / 10**poolDecimals;
+        collateralNeededInETH =
+            ((_userCurrentBorrowBalanceETH +
+                _userCurrentFeesETH +
+                requestedBorrowAmountETH) * 100) /
+            _userCurrentLTV;
     }
 }

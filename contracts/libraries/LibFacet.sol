@@ -2,6 +2,9 @@
 pragma solidity 0.8.17;
 
 import "../LendingPoolCore.sol";
+import "../DataProvider.sol";
+import "../FeeProvider.sol";
+import "../PriceFeed.sol";
 
 library LibFacet {
     bytes32 constant LENDING_POOL_CORE_STORAGE_POSITION =
@@ -14,6 +17,7 @@ library LibFacet {
         uint256 liquidityProvided;
         uint256 principalBorrowBalance;
         uint256 cumulatedVariableBorrowIndex;
+        uint256 lastCumulatedVariableBorrowIndex;
         uint256 compoundedBorrowBalance;
         uint256 collateralEthBalance;
         uint256 liquidationThreshold;
@@ -30,8 +34,10 @@ library LibFacet {
         uint256 totalBorrowedLiquidity;
         uint256 totalVariableBorrowLiquidity;
         uint256 cumulatedLiquidityIndex; // interest cumulated by the reserve during the time interval Dt
+        uint256 lastCumulatedLiquidityIndex;
         uint256 reserveNormalizedIncome; // Ongoing interest cumulated by the reserve
         uint256 cumulatedVariableBorrowIndex;
+        uint256 lastCumulatedVariableBorrowIndex;
         uint256 baseLTV;
         uint256 loanToValue; // weighted average of the LTVs of the currencies making up the reserve
         uint256 liquidationThreshold;
@@ -55,10 +61,13 @@ library LibFacet {
     struct FacetStorage {
         address ethAddress;
         address lpcAddress;
-        address dataFeedAddress;
+        address dataProviderAddress;
+        address priceFeedAddress;
+        address feeProviderAddress;
     }
 
     struct InterestRate {
+        InterestRateMode rateMode;
         uint256 targetUtilisationRate;
         uint256 interestRateSlopeBelow; // constant representing the scaling of the interest rate vs the utilization.
         uint256 interestRateSlopeAbove;
@@ -69,6 +78,7 @@ library LibFacet {
     }
 
     struct UserInterestRate {
+        InterestRateMode rateMode;
         uint256 variableBorrowRate;
         uint256 stableBorrowRate;
         uint256 cumulatedVariableBorrowIndex;
@@ -103,7 +113,19 @@ library LibFacet {
         }
     }
 
-    function getCore() internal view returns (LendingPoolCore core) {
+    function getCore() internal view returns (LendingPoolCore) {
         return LendingPoolCore(facetStorage().lpcAddress);
+    }
+
+    function getDataProvider() internal view returns (DataProvider) {
+        return DataProvider(facetStorage().dataProviderAddress);
+    }
+
+    function getFeeProvider() internal view returns (FeeProvider) {
+        return FeeProvider(facetStorage().feeProviderAddress);
+    }
+
+    function getPriceFeed() internal view returns (PriceFeed) {
+        return PriceFeed(facetStorage().priceFeedAddress);
     }
 }

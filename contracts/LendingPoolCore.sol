@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "./libraries/LibFacet.sol";
 import "./libraries/WadRayMath.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "hardhat/console.sol";
 
 contract LendingPoolCore {
@@ -30,10 +31,22 @@ contract LendingPoolCore {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
         testPrint(pool);
         updateCumulativeIndexes(pool);
-        updatePoolInterestRates(_pool, _amount, 0);
+        updatePoolInterestRates(pool, _amount, 0);
         pool.totalLiquidity += _amount;
         pool.user[_user].liquidityProvided += _amount;
         testPrint(pool);
+    }
+
+    function updateStateOnRedeem(
+        address _pool,
+        address _user,
+        uint256 _amount
+    ) public {
+        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
+        updateCumulativeIndexes(pool);
+        updatePoolInterestRates(pool, 0, _amount);
+        pool.totalLiquidity -= _amount;
+        pool.user[_user].liquidityProvided -= _amount;
     }
 
     function updateStateOnBorrow(
@@ -42,7 +55,7 @@ contract LendingPoolCore {
         uint256 _amount,
         uint256 _borrowFee,
         LibFacet.InterestRateMode _rateMode
-    ) internal returns (uint256, uint256) {
+    ) public returns (uint256, uint256) {
         (
             uint256 principalBorrowBalance,
             ,
@@ -67,7 +80,9 @@ contract LendingPoolCore {
             _rateMode
         );
 
-        updatePoolInterestRates(_pool, 0, _amount);
+        updatePoolInterestRates(LibFacet.lpcStorage().pools[_pool], 0, _amount);
+
+        return (getUserCurrentBorrowRate(_pool, _user), balanceIncrease);
     }
 
     function updatePoolStateOnBorrow(
@@ -106,8 +121,9 @@ contract LendingPoolCore {
             _rateMode == LibFacet.InterestRateMode.VARIABLE
         ) {
             user.rates.stableBorrowRate = 0;
-            user.rates.cumulatedVariableBorrowIndex = pool
-                .cumulatedVariableBorrowIndex;
+
+            user.lastCumulatedVariableBorrowIndex = pool
+                .lastCumulatedVariableBorrowIndex;
         } else {
             revert("Invalid borrow mode.");
         }
@@ -183,34 +199,33 @@ contract LendingPoolCore {
             _pool.cumulatedLiquidityIndex = calculateLinearInterest(
                 _pool.rates.currentLiquidityRate,
                 _pool.lastUpdatedTimestamp
-            ).rayMul(_pool.cumulatedLiquidityIndex);
+            ).rayMul(_pool.lastCumulatedLiquidityIndex);
             _pool.cumulatedVariableBorrowIndex = calculateCompoundedInterest(
                 _pool.rates.variableBorrowRate,
                 LibFacet.lpcStorage().SECONDS_IN_YEAR,
                 block.timestamp,
                 _pool.lastUpdatedTimestamp
-            ).rayMul(_pool.cumulatedVariableBorrowIndex);
+            ).rayMul(_pool.lastCumulatedVariableBorrowIndex);
         }
     }
 
     function updatePoolInterestRates(
-        address _pool,
+        LibFacet.Pool storage _pool,
         uint256 _liquidityAdded,
         uint256 _liquidityTaken
     ) internal {
-        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
         (
-            pool.rates.variableBorrowRate,
-            pool.rates.currentLiquidityRate
+            _pool.rates.variableBorrowRate,
+            _pool.rates.currentLiquidityRate
         ) = calculateInterestRates(
-            pool.totalLiquidity + _liquidityAdded - _liquidityTaken,
-            pool.totalVariableBorrowLiquidity,
-            pool.rates.interestRateSlopeBelow,
-            pool.rates.interestRateSlopeAbove,
-            pool.rates.baseVariableBorrowRate,
-            pool.rates.targetUtilisationRate
+            _pool.totalLiquidity + _liquidityAdded - _liquidityTaken,
+            _pool.totalVariableBorrowLiquidity,
+            _pool.rates.interestRateSlopeBelow,
+            _pool.rates.interestRateSlopeAbove,
+            _pool.rates.baseVariableBorrowRate,
+            _pool.rates.targetUtilisationRate
         );
-        pool.lastUpdatedTimestamp = block.timestamp;
+        _pool.lastUpdatedTimestamp = block.timestamp;
     }
 
     function calculateInterestRates(
@@ -222,7 +237,7 @@ contract LendingPoolCore {
         uint256 _optimalUtilizationRate
     )
         internal
-        view
+        pure
         returns (
             uint256 currentVariableBorrowRate,
             uint256 currentLiquidityRate
@@ -231,7 +246,7 @@ contract LendingPoolCore {
         uint256 totalBorrows = _totalVariableBorrows; /// @dev + totalStableBorrows
         uint256 utilizationRate = (_totalLiquidity == 0 && totalBorrows == 0)
             ? 0
-            : totalBorrows / _totalLiquidity;
+            : totalBorrows.rayDiv(_totalLiquidity);
         if (utilizationRate > _optimalUtilizationRate) {
             uint256 excessUtilizationRateRatio = (utilizationRate -
                 _optimalUtilizationRate).rayDiv(1 - _optimalUtilizationRate);
@@ -251,7 +266,7 @@ contract LendingPoolCore {
         currentLiquidityRate = calculateOverallBorrowRate(
             _totalVariableBorrows,
             currentVariableBorrowRate
-        );
+        ).rayMul(utilizationRate);
     }
 
     function calculateOverallBorrowRate(
@@ -261,7 +276,7 @@ contract LendingPoolCore {
         uint256 totalBorrows = _totalVariableBorrows; /// TODO: + _totalStableBorrows
         if (totalBorrows == 0) return 0;
 
-        uint256 weightedVariableRate = _totalVariableBorrows.wadToRay().rayDiv(
+        uint256 weightedVariableRate = _totalVariableBorrows.wadToRay().rayMul(
             _currentVariableBorrowRate
         );
 
@@ -353,19 +368,46 @@ contract LendingPoolCore {
                 LibFacet.lpcStorage().SECONDS_IN_YEAR,
                 block.timestamp,
                 _pool.lastUpdatedTimestamp
-            ).rayMul(_pool.cumulatedVariableBorrowIndex).rayDiv(
-                    _user.cumulatedVariableBorrowIndex
+            ).rayMul(_pool.lastCumulatedVariableBorrowIndex).rayDiv(
+                    _user.lastCumulatedVariableBorrowIndex
                 );
         }
 
         compoundedBalance = principalBorrowBalance
             .rayMul(cumulatedInterest)
             .rayToWad();
+
         if (compoundedBalance == _user.principalBorrowBalance)
             if (_user.lastUpdatedTimestamp != block.timestamp)
                 return _user.principalBorrowBalance + 1 wei;
 
         return compoundedBalance;
+    }
+
+    function getUserCurrentBorrowRate(address _pool, address _user)
+        internal
+        view
+        returns (uint256)
+    {
+        LibFacet.InterestRateMode rateMode = getUserCurrentBorrowRateMode(
+            _pool,
+            _user
+        );
+
+        if (rateMode == LibFacet.InterestRateMode.NONE) return 0;
+
+        return
+            rateMode == LibFacet.InterestRateMode.STABLE
+                ? 0
+                : LibFacet.lpcStorage().pools[_pool].rates.variableBorrowRate;
+    }
+
+    function getUserCurrentBorrowRateMode(address _pool, address _user)
+        internal
+        view
+        returns (LibFacet.InterestRateMode)
+    {
+        return LibFacet.lpcStorage().pools[_pool].user[_user].rates.rateMode;
     }
 
     function getUserPoolData(address _pool, address _user)
@@ -422,5 +464,55 @@ contract LendingPoolCore {
             _collateralEth.rayMul(_liquidationThreshold).rayDiv(
                 _compoundedBorrowBalance
             );
+    }
+
+    function getPoolDecimals(address _pool) public view returns (uint256) {
+        return LibFacet.lpcStorage().pools[_pool].decimals;
+    }
+
+    function getPoolAvailableLiquidity(address _pool)
+        public
+        view
+        returns (uint256)
+    {
+        return LibFacet.lpcStorage().pools[_pool].totalLiquidity;
+    }
+
+    function isPoolBorrowingEnabled(address _pool) public view returns (bool) {
+        return LibFacet.lpcStorage().pools[_pool].isBorrowingEnabled;
+    }
+
+    function isPoolUsageAsCollateralEnabled(address _pool)
+        public
+        view
+        returns (bool)
+    {
+        return LibFacet.lpcStorage().pools[_pool].isUsableAsCollateral;
+    }
+
+    function transferToPool(
+        address _pool,
+        address _user,
+        uint256 _amount
+    ) public payable {
+        if (_pool == LibFacet.facetStorage().ethAddress) {
+            (bool success, ) = _pool.call{value: _amount}("");
+            require(success, "Error while sending ETH.");
+        } else {
+            ERC20(_pool).transferFrom(_user, _pool, _amount);
+        }
+    }
+
+    function transferToUser(
+        address _pool,
+        address _user,
+        uint256 _amount
+    ) public {
+        if (_pool == LibFacet.facetStorage().ethAddress) {
+            (bool success, ) = _user.call{value: _amount}("");
+            require(success, "Error while sending ETH.");
+        } else {
+            ERC20(_pool).transferFrom(_pool, _user, _amount);
+        }
     }
 }

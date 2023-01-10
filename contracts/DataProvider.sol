@@ -2,10 +2,25 @@
 pragma solidity 0.8.17;
 
 import "./libraries/LibFacet.sol";
-import "./LendingPoolCore.sol";
 import "./PriceFeed.sol";
 
 contract DataProvider {
+    using WadRayMath for uint256;
+
+    struct GetUserGlobalDataVars {
+        uint256 compoundedLiquidityBalance;
+        uint256 compoundedBorrowBalance;
+        uint256 originationFee;
+        uint256 reserveDecimals;
+        uint256 baseLTV;
+        uint256 liquidationThreshold;
+        uint256 tokenUnit;
+        uint256 poolUnitPrice;
+        uint256 liquidityBalanceETH;
+        bool userUsesReserveAsCollateral;
+        bool usageAsCollateralEnabled;
+    }
+
     /// @dev get user data accross all pools
     function getUserGlobalData(address _user)
         external
@@ -21,57 +36,59 @@ contract DataProvider {
             bool healthFactorBelowThreshold
         )
     {
-        address[] pools = LendingPoolCore.getPools();
+        GetUserGlobalDataVars memory vars;
+        LendingPoolCore core = LibFacet.getCore();
+        address[] memory pools = core.getPools();
         for (uint256 poolIdx = 0; poolIdx < pools.length; poolIdx++) {
-            uint256 compoundedLiquidityBalance;
-            uint256 compoundedBorrowBalance;
-            uint256 originationFee;
-            uint256 userUsesReserveAsCollateral;
             (
-                compoundedLiquidityBalance,
-                compoundedBorrowBalance,
-                originationFee,
-                userUsesReserveAsCollateral
-            ) = LendingPoolCore.getUserPoolData(pools[poolIdx], _user);
+                vars.compoundedLiquidityBalance,
+                vars.compoundedBorrowBalance,
+                vars.originationFee,
+                vars.userUsesReserveAsCollateral
+            ) = core.getUserPoolData(pools[poolIdx], _user);
 
-            if (compoundedBorrowBalance == 0 && compoundedLiquidityBalance == 0)
-                continue;
+            if (
+                vars.compoundedBorrowBalance == 0 &&
+                vars.compoundedLiquidityBalance == 0
+            ) continue;
 
-            uint256 reserveDecimals;
-            uint256 baseLTV;
-            uint256 liquidationThreshold;
-            uint256 usageAsCollateralEnabled;
             (
-                reserveDecimals,
-                baseLTV,
-                liquidationThreshold,
-                usageAsCollateralEnabled
-            ) = LendingPoolCore.getPoolConfiguration(pools[poolIdx]);
+                vars.reserveDecimals,
+                vars.baseLTV,
+                vars.liquidationThreshold,
+                vars.usageAsCollateralEnabled
+            ) = core.getPoolConfiguration(pools[poolIdx]);
 
-            uint256 tokenUnit = 10**reserveDecimals;
-            uint256 reserveUnitPrice = PriceFeed(
+            vars.tokenUnit = 10**vars.reserveDecimals;
+            vars.poolUnitPrice = PriceFeed(
                 LibFacet.facetStorage().dataFeedAddress
             ).getAssetPrice(pools[poolIdx]);
 
-            if (compoundedLiquidityBalance > 0) {
-                uint256 liquidityBalanceETH = (reserveUnitPrice *
-                    compoundedLiquidityBalance) / tokenUnit;
-                totalLiquidityBalanceETH += liquidityBalanceETH;
+            if (vars.compoundedLiquidityBalance > 0) {
+                vars.liquidityBalanceETH =
+                    (vars.poolUnitPrice * vars.compoundedLiquidityBalance) /
+                    vars.tokenUnit;
+                totalLiquidityBalanceETH += vars.liquidityBalanceETH;
 
-                if (usageAsCollateralEnabled && userUsesReserveAsCollateral) {
-                    totalCollateralBalanceETH += liquidityBalanceETH;
-                    currentLTV += liquidityBalanceETH * baseLTV;
+                if (
+                    vars.usageAsCollateralEnabled &&
+                    vars.userUsesReserveAsCollateral
+                ) {
+                    totalCollateralBalanceETH += vars.liquidityBalanceETH;
+                    currentLTV += vars.liquidityBalanceETH * vars.baseLTV;
                     currentLiquidationThreshold +=
-                        liquiditybalanceETH *
-                        liquidationThreshold;
+                        vars.liquidityBalanceETH *
+                        vars.liquidationThreshold;
                 }
             }
 
-            if (compoundedBorrowBalance > 0) {
+            if (vars.compoundedBorrowBalance > 0) {
                 totalBorrowBalanceETH +=
-                    (reserveUnitPrice * compoundedBorrowBalance) /
-                    tokenUnit;
-                totalFeesETH += (originationFee * reserveUnitPrice) / tokenUnit;
+                    (vars.poolUnitPrice * vars.compoundedBorrowBalance) /
+                    vars.tokenUnit;
+                totalFeesETH +=
+                    (vars.originationFee * vars.poolUnitPrice) /
+                    vars.tokenUnit;
             }
         }
 
@@ -96,10 +113,10 @@ contract DataProvider {
         uint256 _totalFeesETH,
         uint256 _currentLiquidationThreshold
     ) internal view returns (uint256) {
-        if (_totalBorrowBalanceETH == 0) return uint256(-1);
+        if (_totalBorrowBalanceETH == 0) return uint256(0);
 
         return
             ((_totalCollateralBalanceETH * _currentLiquidationThreshold) / 100)
-                .wadDiv(_totalBorrowBalanceETH + _totalFeesEth);
+                .wadDiv(_totalBorrowBalanceETH + _totalFeesETH);
     }
 }

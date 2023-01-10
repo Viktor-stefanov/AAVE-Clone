@@ -5,6 +5,7 @@
     "reset-deploy": "hardhat deploy --network localhost --reset"
   },
   "dependencies": {
+    "@chainlink/contracts": "^0.5.1",
     "@nomicfoundation/hardhat-toolbox": "^2.0.0",
     "@openzeppelin/contracts": "^4.8.0",
     "@vitejs/plugin-react": "^3.0.0",

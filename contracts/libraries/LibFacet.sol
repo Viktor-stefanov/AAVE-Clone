@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: No-License
 pragma solidity 0.8.17;
 
+import "../LendingPoolCore.sol";
+
 library LibFacet {
     bytes32 constant LENDING_POOL_CORE_STORAGE_POSITION =
         keccak256("diamonds.standart.lending.pool.core.storage");
@@ -99,5 +101,9 @@ library LibFacet {
         assembly {
             fs.slot := position
         }
+    }
+
+    function getCore() internal view returns (LendingPoolCore core) {
+        return LendingPoolCore(facetStorage().lpcAddress);
     }
 }

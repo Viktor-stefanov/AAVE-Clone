@@ -51,7 +51,7 @@ library LibDiamond {
         bytes memory _calldata
     ) internal {
         for (
-            uint256 facetIndex;
+            uint256 facetIndex = 0;
             facetIndex < _diamondCuts.length;
             facetIndex++
         ) {

@@ -4,7 +4,8 @@ pragma solidity 0.8.17;
 import "../LendingPoolCore.sol";
 import "../DataProvider.sol";
 import "../FeeProvider.sol";
-import "../PriceFeed.sol";
+import "../mocks/PriceFeed.sol";
+import "hardhat/console.sol";
 
 library LibFacet {
     bytes32 constant LENDING_POOL_CORE_STORAGE_POSITION =
@@ -19,7 +20,7 @@ library LibFacet {
         uint256 cumulatedVariableBorrowIndex;
         uint256 lastCumulatedVariableBorrowIndex;
         uint256 compoundedBorrowBalance;
-        uint256 collateralEthBalance;
+        uint256 collateralETHBalance;
         uint256 liquidationThreshold;
         uint256 originationFee;
         uint256 healthFactor;
@@ -39,7 +40,7 @@ library LibFacet {
         uint256 cumulatedVariableBorrowIndex;
         uint256 lastCumulatedVariableBorrowIndex;
         uint256 baseLTV;
-        uint256 loanToValue; // weighted average of the LTVs of the currencies making up the reserve
+        uint256 loanToValue;
         uint256 liquidationThreshold;
         uint256 liquidationBonus; // represented in percentage
         uint256 lastUpdatedTimestamp;
@@ -48,8 +49,9 @@ library LibFacet {
         bool isActive;
         bool isFreezed; // only allow repays and redeems, but not deposits, new borrowings or rate swap.
         InterestRate rates;
-        mapping(address => UserPoolData) user;
-        address[] users;
+        mapping(address => UserPoolData) users;
+        address asset;
+        address[] allUsers;
     }
 
     struct LPCStorage {
@@ -95,10 +97,6 @@ library LibFacet {
         NONE
     }
 
-    struct InterestRateStorage {
-        TokenVolatility volatility;
-    }
-
     function lpcStorage() internal pure returns (LPCStorage storage lpcs) {
         bytes32 position = LENDING_POOL_CORE_STORAGE_POSITION;
         assembly {
@@ -111,10 +109,6 @@ library LibFacet {
         assembly {
             fs.slot := position
         }
-    }
-
-    function getCore() internal view returns (LendingPoolCore) {
-        return LendingPoolCore(facetStorage().lpcAddress);
     }
 
     function getDataProvider() internal view returns (DataProvider) {

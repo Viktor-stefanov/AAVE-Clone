@@ -2,7 +2,7 @@
 pragma solidity 0.8.17;
 
 import "./libraries/LibFacet.sol";
-import "./PriceFeed.sol";
+import "hardhat/console.sol";
 
 contract DataProvider {
     using WadRayMath for uint256;
@@ -23,7 +23,7 @@ contract DataProvider {
 
     /// @dev get user data accross all pools
     function getUserGlobalData(address _user)
-        external
+        public
         view
         returns (
             uint256 totalLiquidityBalanceETH,
@@ -37,8 +37,8 @@ contract DataProvider {
         )
     {
         GetUserGlobalDataVars memory vars;
-        LendingPoolCore core = LibFacet.getCore();
-        address[] memory pools = core.getPools();
+        LendingPoolCore core = LendingPoolCore(address(this));
+        address[] memory pools = LibFacet.lpcStorage().allPools;
         for (uint256 poolIdx = 0; poolIdx < pools.length; poolIdx++) {
             (
                 vars.compoundedLiquidityBalance,
@@ -113,7 +113,7 @@ contract DataProvider {
         uint256 _totalFeesETH,
         uint256 _currentLiquidationThreshold
     ) internal pure returns (uint256) {
-        if (_totalBorrowBalanceETH == 0) return uint256(0);
+        if (_totalBorrowBalanceETH == 0) return type(uint256).max;
 
         return
             ((_totalCollateralBalanceETH * _currentLiquidationThreshold) / 100)
@@ -129,7 +129,10 @@ contract DataProvider {
         uint256 _userCurrentLTV
     ) external view returns (uint256 collateralNeededInETH) {
         PriceFeed pf = LibFacet.getPriceFeed();
-        uint256 poolDecimals = LibFacet.getCore().getPoolDecimals(_pool);
+
+        uint256 poolDecimals = LendingPoolCore(address(this)).getPoolDecimals(
+            _pool
+        );
         uint256 requestedBorrowAmountETH = (pf.getAssetPrice(_pool) *
             (_amount + _fee)) / 10**poolDecimals;
         collateralNeededInETH =

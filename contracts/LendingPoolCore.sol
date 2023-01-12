@@ -19,6 +19,7 @@ contract LendingPoolCore {
     }
 
     function testPrint(LibFacet.Pool storage pool) internal view {
+        console.log(pool.totalLiquidity);
         console.log(pool.cumulatedLiquidityIndex);
         console.log(pool.rates.variableBorrowRate);
     }
@@ -32,21 +33,27 @@ contract LendingPoolCore {
         testPrint(pool);
         updateCumulativeIndexes(pool);
         updatePoolInterestRates(pool, _amount, 0);
+        bool isFirstDeposit = pool.users[_user].liquidityProvided == 0;
         pool.totalLiquidity += _amount;
-        pool.user[_user].liquidityProvided += _amount;
-        testPrint(pool);
+        pool.users[_user].liquidityProvided += _amount;
+        if (isFirstDeposit)
+            setUserUsePoolAsCollateralInternal(_pool, _user, true);
     }
 
     function updateStateOnRedeem(
         address _pool,
         address _user,
-        uint256 _amount
+        uint256 _amount,
+        bool _userRedeemedEverything
     ) public {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
         updateCumulativeIndexes(pool);
         updatePoolInterestRates(pool, 0, _amount);
+        /// TODO: subtract the original amount or the accumulated amount?
         pool.totalLiquidity -= _amount;
-        pool.user[_user].liquidityProvided -= _amount;
+        pool.users[_user].liquidityProvided -= _amount;
+        if (_userRedeemedEverything)
+            setUserUsePoolAsCollateralInternal(_pool, _user, false);
     }
 
     function updateStateOnBorrow(
@@ -56,6 +63,8 @@ contract LendingPoolCore {
         uint256 _borrowFee,
         LibFacet.InterestRateMode _rateMode
     ) public returns (uint256, uint256) {
+        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
+        testPrint(pool);
         (
             uint256 principalBorrowBalance,
             ,
@@ -63,7 +72,7 @@ contract LendingPoolCore {
         ) = getUserBorrowBalances(_pool, _user);
 
         updatePoolStateOnBorrow(
-            _pool,
+            pool,
             _user,
             principalBorrowBalance,
             balanceIncrease,
@@ -72,7 +81,7 @@ contract LendingPoolCore {
         );
 
         updateUserStateOnBorrow(
-            _pool,
+            pool,
             _user,
             _amount,
             balanceIncrease,
@@ -80,23 +89,91 @@ contract LendingPoolCore {
             _rateMode
         );
 
-        updatePoolInterestRates(LibFacet.lpcStorage().pools[_pool], 0, _amount);
+        updatePoolInterestRates(pool, 0, _amount);
 
-        return (getUserCurrentBorrowRate(_pool, _user), balanceIncrease);
+        return (getUserCurrentBorrowRate(pool, _user), balanceIncrease);
+    }
+
+    function updateStateOnRepay(
+        address _pool,
+        address _user,
+        uint256 _paybackAmountMinusFees,
+        uint256 _originationFeeRepaid,
+        uint256 _balanceIncrease,
+        bool _repaidWholeLoan
+    ) external {
+        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
+
+        updatePoolStateOnRepay(
+            pool,
+            _user,
+            _paybackAmountMinusFees,
+            _balanceIncrease
+        );
+        updateUserStateOnRepay(
+            pool,
+            _user,
+            _paybackAmountMinusFees,
+            _originationFeeRepaid,
+            _balanceIncrease,
+            _repaidWholeLoan
+        );
+
+        updatePoolInterestRates(pool, _paybackAmountMinusFees, 0);
+    }
+
+    function updatePoolStateOnRepay(
+        LibFacet.Pool storage _pool,
+        address _user,
+        uint256 _paybackAmountMinusFees,
+        uint256 _balanceIncrease
+    ) internal {
+        updateCumulativeIndexes(_pool);
+
+        LibFacet.InterestRateMode borrowMode = getUserCurrentBorrowRateMode(
+            _pool,
+            _user
+        );
+        if (borrowMode == LibFacet.InterestRateMode.VARIABLE) {
+            increaseTotalVariableBorrows(_pool, _balanceIncrease);
+            decreaseTotalVariableBorrows(_pool, _paybackAmountMinusFees);
+        } else {}
+    }
+
+    function updateUserStateOnRepay(
+        LibFacet.Pool storage _pool,
+        address _user,
+        uint256 _paybackAmountMinusFees,
+        uint256 _originationFeeRepaid,
+        uint256 _balanceIncrease,
+        bool _repaidWholeLoan
+    ) internal {
+        LibFacet.UserPoolData storage user = _pool.users[_user];
+        user.principalBorrowBalance =
+            user.principalBorrowBalance +
+            _balanceIncrease -
+            _paybackAmountMinusFees;
+        user.lastCumulatedVariableBorrowIndex = _pool
+            .lastCumulatedVariableBorrowIndex;
+        if (_repaidWholeLoan) {
+            user.rates.stableBorrowRate = 0;
+            user.rates.variableBorrowRate = 0;
+        }
+        user.originationFee = user.originationFee - _originationFeeRepaid;
+        user.lastUpdatedTimestamp = block.timestamp;
     }
 
     function updatePoolStateOnBorrow(
-        address _pool,
+        LibFacet.Pool storage _pool,
         address _user,
         uint256 _principalBorrowBalance,
         uint256 _balanceIncrease,
         uint256 _amountBorrowed,
         LibFacet.InterestRateMode _rateMode
     ) internal {
-        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
-        updateCumulativeIndexes(pool);
+        updateCumulativeIndexes(_pool);
         updatePoolTotalBorrows(
-            pool,
+            _pool,
             _user,
             _principalBorrowBalance,
             _balanceIncrease,
@@ -105,24 +182,22 @@ contract LendingPoolCore {
         );
     }
 
-    /// TODO: ADD previous values of indexes to the Pool and UserPoolData structs.
+    // TODO: ADD previous values of indexes to the Pool and UserPoolData structs.
     function updateUserStateOnBorrow(
-        address _pool,
+        LibFacet.Pool storage _pool,
         address _user,
         uint256 _amountBorrowed,
         uint256 _balanceIncrease,
         uint256 _fee,
         LibFacet.InterestRateMode _rateMode
     ) internal {
-        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
-        LibFacet.UserPoolData storage user = pool.user[_user];
+        LibFacet.UserPoolData storage user = _pool.users[_user];
 
         if (_rateMode == LibFacet.InterestRateMode.STABLE) {} else if (
             _rateMode == LibFacet.InterestRateMode.VARIABLE
         ) {
             user.rates.stableBorrowRate = 0;
-
-            user.lastCumulatedVariableBorrowIndex = pool
+            user.lastCumulatedVariableBorrowIndex = _pool
                 .lastCumulatedVariableBorrowIndex;
         } else {
             revert("Invalid borrow mode.");
@@ -142,7 +217,7 @@ contract LendingPoolCore {
         LibFacet.InterestRateMode _newRateMode
     ) internal {
         LibFacet.InterestRateMode previousRateMode = getUserCurrentBorrowRateMode(
-                _pool.user[_user]
+                _pool.users[_user]
             );
         if (previousRateMode == LibFacet.InterestRateMode.STABLE) {} else if (
             previousRateMode == LibFacet.InterestRateMode.VARIABLE
@@ -154,7 +229,7 @@ contract LendingPoolCore {
             _amountBorrowed +
             _balanceIncrease;
         if (_newRateMode == LibFacet.InterestRateMode.STABLE) {} else if (
-            previousRateMode == LibFacet.InterestRateMode.VARIABLE
+            _newRateMode == LibFacet.InterestRateMode.VARIABLE
         ) {
             increaseTotalVariableBorrows(_pool, newPrincipalAmount);
         } else {
@@ -180,9 +255,9 @@ contract LendingPoolCore {
         _pool.totalVariableBorrowLiquidity += _amount;
     }
 
-    function getUserCurrentBorrowRateMode(LibFacet.UserPoolData storage _user)
+    function getUserCurrentBorrowRateMode(LibFacet.UserPoolData memory _user)
         internal
-        view
+        pure
         returns (LibFacet.InterestRateMode)
     {
         if (_user.principalBorrowBalance == 0)
@@ -284,7 +359,7 @@ contract LendingPoolCore {
     }
 
     function getUserBorrowBalances(address _pool, address _user)
-        internal
+        public
         view
         returns (
             uint256,
@@ -293,7 +368,7 @@ contract LendingPoolCore {
         )
     {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
-        LibFacet.UserPoolData storage user = pool.user[_user];
+        LibFacet.UserPoolData storage user = pool.users[_user];
         if (user.principalBorrowBalance == 0) return (0, 0, 0);
 
         uint256 compoundedBalance = getCompoundedBorrowBalance(user, pool);
@@ -302,6 +377,14 @@ contract LendingPoolCore {
             compoundedBalance,
             compoundedBalance - user.principalBorrowBalance
         );
+    }
+
+    function getUserOriginationFee(address _pool, address _user)
+        public
+        view
+        returns (uint256)
+    {
+        return LibFacet.lpcStorage().pools[_pool].users[_user].originationFee;
     }
 
     /// @dev calculates interest using compounded interest rate formula
@@ -341,13 +424,13 @@ contract LendingPoolCore {
             );
     }
 
-    function calculateAvailableLiquidity(LibFacet.Pool storage pool)
-        internal
-        view
-        returns (uint256)
-    {
-        return pool.totalLiquidity - pool.totalBorrowedLiquidity;
-    }
+    //function calculateAvailableLiquidity(LibFacet.Pool storage pool)
+    //    internal
+    //    view
+    //    returns (uint256)
+    //{
+    //    return pool.totalLiquidity - pool.totalBorrowedLiquidity;
+    //}
 
     function getCompoundedBorrowBalance(
         LibFacet.UserPoolData storage _user,
@@ -384,14 +467,12 @@ contract LendingPoolCore {
         return compoundedBalance;
     }
 
-    function getUserCurrentBorrowRate(address _pool, address _user)
-        internal
-        view
-        returns (uint256)
-    {
+    function getUserCurrentBorrowRate(
+        LibFacet.Pool storage _pool,
+        address _user
+    ) internal view returns (uint256) {
         LibFacet.InterestRateMode rateMode = getUserCurrentBorrowRateMode(
-            _pool,
-            _user
+            _pool.users[_user]
         );
 
         if (rateMode == LibFacet.InterestRateMode.NONE) return 0;
@@ -399,19 +480,18 @@ contract LendingPoolCore {
         return
             rateMode == LibFacet.InterestRateMode.STABLE
                 ? 0
-                : LibFacet.lpcStorage().pools[_pool].rates.variableBorrowRate;
+                : _pool.rates.variableBorrowRate;
     }
 
-    function getUserCurrentBorrowRateMode(address _pool, address _user)
-        internal
-        view
-        returns (LibFacet.InterestRateMode)
-    {
-        return LibFacet.lpcStorage().pools[_pool].user[_user].rates.rateMode;
+    function getUserCurrentBorrowRateMode(
+        LibFacet.Pool storage _pool,
+        address _user
+    ) internal view returns (LibFacet.InterestRateMode) {
+        return _pool.users[_user].rates.rateMode;
     }
 
     function getUserPoolData(address _pool, address _user)
-        external
+        public
         view
         returns (
             uint256 compoundedLiquidityBalance,
@@ -421,19 +501,20 @@ contract LendingPoolCore {
         )
     {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
-        uint256 assetBalance = pool.user[_user].liquidityProvided;
-        if (pool.user[_user].principalBorrowBalance == 0)
-            return (assetBalance, 0, 0, pool.user[_user].useAsCollateral);
+        uint256 assetBalance = pool.users[_user].liquidityProvided;
+        if (pool.users[_user].principalBorrowBalance == 0)
+            return (assetBalance, 0, 0, pool.users[_user].useAsCollateral);
+
         return (
             assetBalance,
-            getCompoundedBorrowBalance(pool.user[_user], pool),
-            pool.user[_user].originationFee,
-            pool.user[_user].useAsCollateral
+            getCompoundedBorrowBalance(pool.users[_user], pool),
+            pool.users[_user].originationFee,
+            pool.users[_user].useAsCollateral
         );
     }
 
     function getPoolConfiguration(address _pool)
-        external
+        public
         view
         returns (
             uint256 reserveDecimals,
@@ -451,20 +532,16 @@ contract LendingPoolCore {
         );
     }
 
-    function getPools() external view returns (address[] memory) {
-        return LibFacet.lpcStorage().allPools;
-    }
-
-    function getHealthFactor(
-        uint256 _collateralEth,
-        uint256 _liquidationThreshold,
-        uint256 _compoundedBorrowBalance
-    ) internal pure returns (uint256) {
-        return
-            _collateralEth.rayMul(_liquidationThreshold).rayDiv(
-                _compoundedBorrowBalance
-            );
-    }
+    //function getHealthFactor(
+    //    uint256 _collateralEth,
+    //    uint256 _liquidationThreshold,
+    //    uint256 _compoundedBorrowBalance
+    //) internal pure returns (uint256) {
+    //    return
+    //        _collateralEth.rayMul(_liquidationThreshold).rayDiv(
+    //            _compoundedBorrowBalance
+    //        );
+    //}
 
     function getPoolDecimals(address _pool) public view returns (uint256) {
         return LibFacet.lpcStorage().pools[_pool].decimals;
@@ -490,6 +567,18 @@ contract LendingPoolCore {
         return LibFacet.lpcStorage().pools[_pool].isUsableAsCollateral;
     }
 
+    function setUserUsePoolAsCollateralInternal(
+        address _pool,
+        address _user,
+        bool _useAsCollateral
+    ) public {
+        LibFacet
+            .lpcStorage()
+            .pools[_pool]
+            .users[_user]
+            .useAsCollateral = _useAsCollateral;
+    }
+
     function transferToPool(
         address _pool,
         address _user,
@@ -499,6 +588,7 @@ contract LendingPoolCore {
             (bool success, ) = _pool.call{value: _amount}("");
             require(success, "Error while sending ETH.");
         } else {
+            console.log(LibFacet.facetStorage().ethAddress);
             ERC20(_pool).transferFrom(_user, _pool, _amount);
         }
     }
@@ -513,6 +603,29 @@ contract LendingPoolCore {
             require(success, "Error while sending ETH.");
         } else {
             ERC20(_pool).transferFrom(_pool, _user, _amount);
+        }
+    }
+
+    function transferToFeeCollector(
+        address _token,
+        address _user,
+        uint256 _amount
+    ) public payable {
+        address feeProvider = LibFacet.facetStorage().feeProviderAddress;
+        if (_token != LibFacet.facetStorage().ethAddress) {
+            require(
+                msg.value == 0,
+                "User is sending ETH along with the ERC20 transfer. Check the value attribute of the transaction"
+            );
+            ERC20(_token).transferFrom(_user, feeProvider, _amount);
+        } else {
+            require(
+                msg.value >= _amount,
+                "The amount and the value sent to deposit do not match"
+            );
+            //solium-disable-next-line
+            (bool result, ) = feeProvider.call{value: _amount}("");
+            require(result, "Transfer of ETH failed");
         }
     }
 }

@@ -3,6 +3,7 @@ pragma solidity 0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "./libraries/LibFacet.sol";
+import "hardhat/console.sol";
 
 contract LendingPool {
     function deposit(
@@ -10,7 +11,6 @@ contract LendingPool {
         address _user,
         uint256 _amount
     ) external payable {
-        LendingPoolCore core = LibFacet.getCore();
         require(
             _pool == LibFacet.facetStorage().ethAddress
                 ? _user.balance >= _amount
@@ -18,8 +18,11 @@ contract LendingPool {
             "Insufficient token balance."
         );
 
-        core.updateStateOnDeposit(_pool, msg.sender, _amount);
-        core.transferToPool(_pool, _user, _amount);
+        LendingPoolCore(address(this)).updateStateOnDeposit(
+            _pool,
+            msg.sender,
+            _amount
+        );
     }
 
     function redeem(
@@ -27,13 +30,18 @@ contract LendingPool {
         address _user,
         uint256 _amount
     ) external {
+        LendingPoolCore core = LendingPoolCore(address(this));
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
-        LendingPoolCore core = LibFacet.getCore();
         require(
             pool.totalLiquidity >= _amount,
             "There is not enough liquidity available to redeem."
         );
-        core.updateStateOnRedeem(_pool, _amount);
+        core.updateStateOnRedeem(
+            _pool,
+            msg.sender,
+            _amount,
+            _amount == pool.users[_user].liquidityProvided
+        );
         core.transferToUser(_pool, _user, _amount);
     }
 
@@ -62,8 +70,7 @@ contract LendingPool {
         LibFacet.InterestRateMode _rateMode
     ) external {
         BorrowLocalVars memory vars;
-        LendingPoolCore core = LibFacet.getCore();
-        DataProvider dataProvider = LibFacet.getDataProvider();
+        LendingPoolCore core = LendingPoolCore(address(this));
         require(
             core.isPoolBorrowingEnabled(_pool),
             "Pool is not enabled for borrowing."
@@ -87,7 +94,7 @@ contract LendingPool {
             vars.currentLiquidationThreshold,
             ,
             vars.healthFactorBelowThreshold
-        ) = dataProvider.getUserGlobalData(msg.sender);
+        ) = DataProvider(address(this)).getUserGlobalData(msg.sender);
 
         require(
             vars.userCollateralBalanceETH > 0,
@@ -98,14 +105,13 @@ contract LendingPool {
             "The borrower can already be liquidated."
         );
 
-        vars.borrowFee = LibFacet.getFeeProvider().calculateLoanOriginationFee(
+        vars.borrowFee = FeeProvider(address(this)).calculateLoanOriginationFee(
             _amount
         );
 
         require(vars.borrowFee > 0, "The amount to borrow is too small.");
 
-        vars.amountOfCollateralNeededETH = LibFacet
-            .getDataProvider()
+        vars.amountOfCollateralNeededETH = DataProvider(address(this))
             .calculateCollateralNeededInETH(
                 _pool,
                 _amount,
@@ -120,7 +126,7 @@ contract LendingPool {
             "Insufficient collateral to cover a new borrow."
         );
 
-        /// @TODO: add stable rate checks
+        /// TODO: add stable rate checks
         (vars.finalUserBorrowRate, vars.borrowBalanceIncrease) = core
             .updateStateOnBorrow(
                 _pool,
@@ -131,5 +137,97 @@ contract LendingPool {
             );
 
         core.transferToUser(_pool, msg.sender, _amount);
+    }
+
+    struct RepayLocalVars {
+        uint256 principalBorrowBalance;
+        uint256 compoundedBorrowBalance;
+        uint256 borrowBalanceIncrease;
+        bool isETH;
+        uint256 paybackAmount;
+        uint256 paybackAmountMinusFees;
+        uint256 currentStableRate;
+        uint256 originationFee;
+    }
+
+    function repay(address _pool, uint256 _amount) external payable {
+        LendingPoolCore core = LendingPoolCore(address(this));
+        RepayLocalVars memory vars;
+
+        (
+            vars.principalBorrowBalance,
+            vars.compoundedBorrowBalance,
+            vars.borrowBalanceIncrease
+        ) = core.getUserBorrowBalances(_pool, msg.sender);
+
+        vars.originationFee = core.getUserOriginationFee(_pool, msg.sender);
+        vars.isETH = LibFacet.facetStorage().ethAddress == _pool;
+
+        require(
+            vars.compoundedBorrowBalance > 0,
+            "The user does nto have any borrow pending."
+        );
+
+        vars.paybackAmount = vars.compoundedBorrowBalance + vars.originationFee;
+
+        require(
+            !vars.isETH || msg.value >= vars.paybackAmount,
+            "Insufficient msg.value send for the repayment."
+        );
+
+        // if the payback amount is smaller than the origination fee, just transfer the amount to the fee destination address
+        if (vars.paybackAmount <= vars.originationFee) {
+            core.updateStateOnRepay(
+                _pool,
+                msg.sender,
+                0,
+                vars.paybackAmount,
+                vars.borrowBalanceIncrease,
+                false
+            );
+            core.transferToFeeCollector{
+                value: vars.isETH ? vars.paybackAmount : 0
+            }(_pool, msg.sender, vars.paybackAmount);
+            return;
+        }
+
+        vars.paybackAmountMinusFees = vars.paybackAmount - vars.originationFee;
+        core.updateStateOnRepay(
+            _pool,
+            msg.sender,
+            vars.paybackAmountMinusFees,
+            vars.originationFee,
+            vars.borrowBalanceIncrease,
+            vars.compoundedBorrowBalance == vars.paybackAmountMinusFees
+        );
+
+        if (vars.originationFee > 0) {
+            core.transferToFeeCollector{
+                value: vars.isETH ? vars.originationFee : 0
+            }(_pool, msg.sender, vars.originationFee);
+        }
+
+        core.transferToPool{
+            value: vars.isETH ? msg.value - vars.originationFee : 0
+        }(_pool, msg.sender, vars.paybackAmountMinusFees);
+    }
+
+    function setUserUsePoolAsCollateral(address _pool, bool _useAsCollateral)
+        external
+    {
+        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
+        require(
+            pool.users[msg.sender].liquidityProvided > 0,
+            "User does not have any liquidity deposited."
+        );
+        require(
+            !pool.users[msg.sender].useAsCollateral,
+            "User deposit is already used as collateral."
+        );
+        LendingPoolCore(address(this)).setUserUsePoolAsCollateralInternal(
+            _pool,
+            msg.sender,
+            _useAsCollateral
+        );
     }
 }

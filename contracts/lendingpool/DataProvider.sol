@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: No-License
 pragma solidity 0.8.17;
 
-import "./libraries/LibFacet.sol";
+import "../libraries/LibFacet.sol";
 import "hardhat/console.sol";
 
 contract DataProvider {
@@ -68,6 +68,7 @@ contract DataProvider {
                 vars.liquidityBalanceETH =
                     (vars.poolUnitPrice * vars.compoundedLiquidityBalance) /
                     vars.tokenUnit;
+                /// @dev totalLiquidityBalanceETH is the equivalent asset in US dollars. So 0.5 compoundedLiquidityBalance will yield 750 totalLiquidtiyBalacneETH if price for 1 ETH = 1500
                 totalLiquidityBalanceETH += vars.liquidityBalanceETH;
 
                 if (
@@ -92,6 +93,7 @@ contract DataProvider {
             }
         }
 
+        /// TODO: aren't the currentLTV and currentLiquidationThreshold always equal to baseLTV and liquidationThreshold?
         currentLTV = totalCollateralBalanceETH > 0
             ? currentLTV / totalCollateralBalanceETH
             : 0;

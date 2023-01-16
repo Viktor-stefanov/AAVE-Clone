@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: No-License
 pragma solidity 0.8.17;
 
-import "./libraries/WadRayMath.sol";
+import "../libraries/WadRayMath.sol";
 
 contract FeeProvider {
     using WadRayMath for uint256;

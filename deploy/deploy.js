@@ -1,8 +1,13 @@
+const {
+  increase,
+} = require("@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time");
 const { ethers } = require("hardhat");
 
 module.exports = async ({ getNamedAccounts, deployments }) => {
   const { deploy } = deployments;
   const { deployer } = await getNamedAccounts();
+
+  const [user1, user2] = await ethers.getSigners();
 
   const lp = await deploy("LendingPool", { from: deployer, log: true }),
     lpc = await deploy("LendingPoolCore", { from: deployer, log: true }),
@@ -17,6 +22,16 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
       from: deployer,
       log: true,
       args: [18, 1500],
+    }),
+    usdcAggregator = await deploy("UsdcAggregator", {
+      from: deployer,
+      log: true,
+      args: [18, 1],
+    }),
+    usdcMock = await deploy("UsdcMock", {
+      from: deployer,
+      log: true,
+      args: [user2.address],
     });
 
   // add ETH price oracle
@@ -25,6 +40,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     "0x79a6dda6dc83994a466272f1c845e6156267cf78",
     ethAggregator.address
   );
+  await p.addAssetOracle(usdcMock.address, usdcAggregator.address);
 
   const iLpc = new ethers.utils.Interface(lpc.abi),
     lpcFunctions = lpc.abi.filter((a) => a.type === "function"),
@@ -69,30 +85,55 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     ],
   });
 
-  let d = new ethers.Contract(
-    diamond.address,
-    lpconf.abi,
-    await ethers.getSigner()
-  );
+  let d = new ethers.Contract(diamond.address, lpconf.abi, user1);
 
   await d.initPool("0x79a6dda6dc83994a466272f1c845e6156267cf78", 18, 1);
+  await d.initPool(usdcMock.address, 18, 0);
 
-  let di = new ethers.Contract(
-    diamond.address,
-    lp.abi,
-    await ethers.getSigner()
-  );
+  let di = new ethers.Contract(diamond.address, lp.abi, user1);
 
   await di.deposit(
     "0x79a6dda6dc83994a466272f1c845e6156267cf78",
-    deployer,
+    user1.address,
     ethers.utils.parseEther("10"),
     { value: ethers.utils.parseEther("10") }
   );
 
+  di = new ethers.Contract(diamond.address, lp.abi, user2);
+
+  await di.deposit(
+    usdcMock.address,
+    user2.address,
+    ethers.utils.parseEther("1500")
+  );
+
   await di.borrow(
     "0x79a6dda6dc83994a466272f1c845e6156267cf78",
-    ethers.utils.parseEther("3"),
+    ethers.utils.parseEther("0.5"),
     0
   );
+
+  await di.test("0x79a6dda6dc83994a466272f1c845e6156267cf78", user2.address);
+
+  await increase(60 * 60 * 24 * 365);
+
+  await di.test("0x79a6dda6dc83994a466272f1c845e6156267cf78", user2.address);
+
+  //await di.borrow(
+  //  "0x79a6dda6dc83994a466272f1c845e6156267cf78",
+  //  ethers.utils.parseEther("0.5"),
+  //  0
+  //);
+
+  //await di.repay(
+  //  "0x79a6dda6dc83994a466272f1c845e6156267cf78",
+  //  ethers.utils.parseEther("3")
+  //);
+
+  //di.connect(user1);
+
+  //await di.redeem(
+  //  "0x79a6dda6dc83994a466272f1c845e6156267cf78",
+  //  ethers.utils.parseEther("3")
+  //);
 };

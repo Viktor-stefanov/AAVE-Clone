@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: No-License
 pragma solidity 0.8.17;
 
-import "./libraries/LibFacet.sol";
-import "./libraries/WadRayMath.sol";
+import "../libraries/LibFacet.sol";
+import "../libraries/WadRayMath.sol";
 import "hardhat/console.sol";
 
 contract LendingPoolConfigurator {
@@ -19,7 +19,6 @@ contract LendingPoolConfigurator {
         LibFacet.facetStorage().priceFeedAddress = _pfAddress;
         LibFacet.facetStorage().dataProviderAddress = _dpAddress;
         LibFacet.facetStorage().lpcAddress = _lpcAddress;
-        LibFacet.lpcStorage().SECONDS_IN_YEAR = 31556926;
         LibFacet.lpcStorage().allPools = new address[](10);
     }
 

@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: No-License
 pragma solidity 0.8.17;
 
-import "../LendingPoolCore.sol";
-import "../DataProvider.sol";
-import "../FeeProvider.sol";
+import "../lendingpool/LendingPoolCore.sol";
+import "../lendingpool/DataProvider.sol";
+import "../lendingpool/FeeProvider.sol";
 import "../mocks/PriceFeed.sol";
 import "hardhat/console.sol";
 
 library LibFacet {
-    bytes32 constant LENDING_POOL_CORE_STORAGE_POSITION =
+    uint256 internal constant SECONDS_IN_A_YEAR = 365 days;
+    bytes32 internal constant LENDING_POOL_CORE_STORAGE_POSITION =
         keccak256("diamonds.standart.lending.pool.core.storage");
-    bytes32 constant FACET_STORAGE_POSITION =
+    bytes32 internal constant FACET_STORAGE_POSITION =
         keccak256("diamonds.standart.facet.storage");
 
     // user data tied to a specific pool
@@ -35,10 +36,8 @@ library LibFacet {
         uint256 totalBorrowedLiquidity;
         uint256 totalVariableBorrowLiquidity;
         uint256 cumulatedLiquidityIndex; // interest cumulated by the reserve during the time interval Dt
-        uint256 lastCumulatedLiquidityIndex;
         uint256 reserveNormalizedIncome; // Ongoing interest cumulated by the reserve
         uint256 cumulatedVariableBorrowIndex;
-        uint256 lastCumulatedVariableBorrowIndex;
         uint256 baseLTV;
         uint256 loanToValue;
         uint256 liquidationThreshold;
@@ -57,7 +56,6 @@ library LibFacet {
     struct LPCStorage {
         mapping(address => Pool) pools;
         address[] allPools;
-        uint256 SECONDS_IN_YEAR;
     }
 
     struct FacetStorage {

@@ -1,0 +1,61 @@
+Compounded interest rate calculations:
+
+1. User1 deposits 10 ETH into the ETH pool:
+
+cumulatedIndexes stay at initial values because totalBorrows == 0.
+
+rates stay at 0 because totalBorrows == 0
+lastUpdatedTimestamp = 0 (time will start from 0 for simplicity reasons)
+
+
+2. User2 deposits 1000 DAI in the DAI pool:
+
+cumulatedIndexes stay the same
+rates stay at 0 because totalBorrows == 0
+lastUpdatedTimestamp = 3600 (1 hour after user1 deposits 10 ETH)
+
+
+3. User1 borrows 0.5 ETH from the ETH pool using his 1000 DAI as collateral
+
+output from DataProvider.calculateUserGlobalData(user.address) in LendingPool.sol:
+healthFactor = max uint256 value
+healthFactorBelowThreshold = false
+currentLTV = baseLTV
+currentLiquidationThreshold = LiquidationThreshold
+totalBorrowBalanceETH = 0
+totalFeesETH = 0
+totalLiquidityBalanceETH = 1500 (1 * 1500)
+totalCollateralBalanceETH = 1500 (1 * 1500) because initially all deposits are set as collateral
+
+1500 collateralBalanceETH is enough to borrow 0.5 ETH at 0.65 LTV
+
+There are 2 paths we can take when updating the state on borrow:
+  assume that state variables (user.principalBorrowBalance, compoundedBalance...) are set BEFORE updating indexes/rates or AFTER
+  I will assume they are set AFTER we update the indexes/rates
+
+lastUpdatedTimestamp = 3600
+totalBorrowsVariable = 0.5
+totalBorrows = 0.5
+user.principalBorrowBalance = 0.5
+user.originationFee = 0.00025
+user.cumulatedBorrowIndex = pool.cumulatedBorrowIndex = 1 RAY
+user.lastUpdatedTimestamp = 3600
+
+currentLiquidityRate = 0.5;
+currentVariableBorrowRate = 0.5;
+
+
+1 week passes
+block.timestamp = 608 400
+4. User1 repays his 0.5 ETH + the acummulated interest + the origination origination fee
+
+utilizationRate = 0.5 / 10 = 0.05
+variableBorrowRate = 0 + 0.05/0.7 * 8 = 0.5714285714
+overallBorrowRate = variableBorrowRate = 0.5714285714
+currentLiquidityRate = 0.5714285714 * 0.05 = 0.0285714286 
+deltaTime = block.timestamp - block.lastUpdatedTimestamp = 604 800;
+deltaTyear = 0.01916536483; 
+cumulatedLiquidityIndex = (0.0285714286 * 0.01916536483 + 1) * cumulatedLiquidityIndex = 1.00054758185
+cumulatedVariableBorrowIndex = (1 + 0.5714285714 / 31 556 926) ^ 604800 * cumulatedVariableBorrowIndex = 1.01101182559;
+
+totalVariableBorrows = 0.5 + 

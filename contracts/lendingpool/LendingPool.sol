@@ -2,7 +2,7 @@
 pragma solidity 0.8.17;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "./libraries/LibFacet.sol";
+import "../libraries/LibFacet.sol";
 import "hardhat/console.sol";
 
 contract LendingPool {
@@ -30,6 +30,7 @@ contract LendingPool {
         address _user,
         uint256 _amount
     ) external {
+        console.log("redeeming");
         LendingPoolCore core = LendingPoolCore(address(this));
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
         require(
@@ -229,5 +230,13 @@ contract LendingPool {
             msg.sender,
             _useAsCollateral
         );
+    }
+
+    function test(address _pool, address _user) public view {
+        (uint256 p, uint256 c, uint256 comp) = LendingPoolCore(address(this))
+            .getUserBorrowBalances(_pool, _user);
+        console.log(p);
+        console.log(c);
+        console.log(comp);
     }
 }

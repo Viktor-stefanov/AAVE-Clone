@@ -45,7 +45,7 @@ contract DataProvider {
                 vars.compoundedBorrowBalance,
                 vars.originationFee,
                 vars.userUsesReserveAsCollateral
-            ) = core.getUserPoolData(pools[poolIdx], _user);
+            ) = core.getUserBasicPoolData(pools[poolIdx], _user);
 
             if (
                 vars.compoundedBorrowBalance == 0 &&
@@ -109,6 +109,34 @@ contract DataProvider {
         healthFactorBelowThreshold = healthFactor < 1e18;
     }
 
+    function getUserPoolData(address _pool, address _user)
+        public
+        view
+        returns (
+            uint256 currentBorrowBalance,
+            uint256 principalBorrowBalance,
+            uint256 liquidityRate,
+            uint256 originationFee,
+            uint256 variableBorrowIndex,
+            uint256 lastUpdatedTimestamp,
+            LibFacet.InterestRateMode borrowRateMode,
+            bool usageAsCollateralEnabled
+        )
+    {
+        LendingPoolCore core = LendingPoolCore(address(this));
+        (principalBorrowBalance, currentBorrowBalance, ) = core
+            .getUserBorrowBalances(_pool, _user);
+        borrowRateMode = core.getUserCurrentBorrowRateMode(_pool, _user);
+        liquidityRate = core.getPoolLiquidityRate(_pool);
+        originationFee = core.getUserOriginationFee(_pool, _user);
+        variableBorrowIndex = core.getUserVariableBorrowIndex(_pool, _user);
+        lastUpdatedTimestamp = core.getUserLastUpdatedTimestamp(_pool, _user);
+        usageAsCollateralEnabled = core.getUserUsePoolAsCollateral(
+            _pool,
+            _user
+        );
+    }
+
     function calculateHealthFactorFromBalances(
         uint256 _totalCollateralBalanceETH,
         uint256 _totalBorrowBalanceETH,
@@ -120,6 +148,47 @@ contract DataProvider {
         return
             ((_totalCollateralBalanceETH * _currentLiquidationThreshold) / 100)
                 .wadDiv(_totalBorrowBalanceETH + _totalFeesETH);
+    }
+
+    function calculateAvailableBorrowsETH(address _user)
+        public
+        view
+        returns (uint256)
+    {
+        (
+            ,
+            uint256 collateralBalanceETH,
+            uint256 borrowBalanceETH,
+            uint256 totalFeesETH,
+            uint256 LTV,
+            ,
+            ,
+
+        ) = getUserGlobalData(_user);
+
+        return
+            calculateAvailableBorrowsETHInternal(
+                collateralBalanceETH,
+                borrowBalanceETH,
+                totalFeesETH,
+                LTV
+            );
+    }
+
+    function calculateAvailableBorrowsETHInternal(
+        uint256 _collateralBalanceETH,
+        uint256 _borrowBalanceETH,
+        uint256 _totalFeesETH,
+        uint256 _LTV
+    ) internal view returns (uint256) {
+        uint256 availableBorrowsETH = (_collateralBalanceETH * _LTV) / 100;
+        if (availableBorrowsETH <= _borrowBalanceETH) return 0;
+
+        availableBorrowsETH -= _borrowBalanceETH + _totalFeesETH;
+
+        uint256 originationFee = FeeProvider(address(this))
+            .calculateLoanOriginationFee(availableBorrowsETH);
+        return availableBorrowsETH - originationFee;
     }
 
     function calculateCollateralNeededInETH(

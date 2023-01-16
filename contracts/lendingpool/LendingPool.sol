@@ -146,7 +146,7 @@ contract LendingPool {
         uint256 borrowBalanceIncrease;
         bool isETH;
         uint256 paybackAmount;
-        uint256 paybackAmountMinusFees;
+        uint256 paybackAmountMinusFee;
         uint256 currentStableRate;
         uint256 originationFee;
     }
@@ -169,14 +169,15 @@ contract LendingPool {
             "The user does nto have any borrow pending."
         );
 
+        /// @note default behavior is to repay the full loan
         vars.paybackAmount = vars.compoundedBorrowBalance + vars.originationFee;
+        if (_amount < vars.paybackAmount) vars.paybackAmount = _amount;
 
         require(
             !vars.isETH || msg.value >= vars.paybackAmount,
             "Insufficient msg.value send for the repayment."
         );
 
-        // if the payback amount is smaller than the origination fee, just transfer the amount to the fee destination address
         if (vars.paybackAmount <= vars.originationFee) {
             core.updateStateOnRepay(
                 _pool,
@@ -192,14 +193,22 @@ contract LendingPool {
             return;
         }
 
-        vars.paybackAmountMinusFees = vars.paybackAmount - vars.originationFee;
+        vars.paybackAmountMinusFee = vars.paybackAmount - vars.originationFee;
+        console.log("amount:");
+        console.log(_amount);
+
+        console.log("please");
+        console.log(vars.paybackAmount);
+        console.log(vars.compoundedBorrowBalance);
+        console.log(vars.principalBorrowBalance);
+        console.log(vars.originationFee);
         core.updateStateOnRepay(
             _pool,
             msg.sender,
-            vars.paybackAmountMinusFees,
+            vars.paybackAmountMinusFee,
             vars.originationFee,
             vars.borrowBalanceIncrease,
-            vars.compoundedBorrowBalance == vars.paybackAmountMinusFees
+            vars.compoundedBorrowBalance == vars.paybackAmountMinusFee
         );
 
         if (vars.originationFee > 0) {
@@ -210,7 +219,7 @@ contract LendingPool {
 
         core.transferToPool{
             value: vars.isETH ? msg.value - vars.originationFee : 0
-        }(_pool, msg.sender, vars.paybackAmountMinusFees);
+        }(_pool, msg.sender, vars.paybackAmountMinusFee);
     }
 
     function setUserUsePoolAsCollateral(address _pool, bool _useAsCollateral)
@@ -232,11 +241,41 @@ contract LendingPool {
         );
     }
 
+    /// TODO: why do we take the origination fee from the compounded balance and not the principal amount?
+    function calculateUserAmountToRepay(address _pool, address _user)
+        public
+        view
+        returns (uint256)
+    {
+        (
+            uint256 principalBorrowBalance,
+            uint256 compoundedBorrowBalance,
+
+        ) = LendingPoolCore(address(this)).getUserBorrowBalances(_pool, _user);
+        uint256 originationFee = FeeProvider(address(this))
+            .calculateLoanOriginationFee(compoundedBorrowBalance);
+
+        return compoundedBorrowBalance + originationFee;
+    }
+
     function test(address _pool, address _user) public view {
-        (uint256 p, uint256 c, uint256 comp) = LendingPoolCore(address(this))
-            .getUserBorrowBalances(_pool, _user);
-        console.log(p);
-        console.log(c);
-        console.log(comp);
+        (
+            uint256 currentBorrowBalance,
+            uint256 principalBorrowBalance,
+            uint256 liquidityRate,
+            uint256 originationFee,
+            uint256 variableBorrowIndex,
+            uint256 lastUpdatedTimestamp,
+            LibFacet.InterestRateMode borrowRate,
+            bool usageAsCollateralEnabled
+        ) = DataProvider(address(this)).getUserPoolData(_pool, _user);
+        console.log("\n");
+        console.log(principalBorrowBalance);
+        console.log(currentBorrowBalance);
+        console.log(currentBorrowBalance - principalBorrowBalance);
+        console.log(currentBorrowBalance + originationFee);
+        console.log(originationFee);
+        console.log(liquidityRate);
+        console.log(variableBorrowIndex);
     }
 }

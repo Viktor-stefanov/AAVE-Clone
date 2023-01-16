@@ -1,6 +1,4 @@
-const {
-  increase,
-} = require("@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time");
+const { increase } = require("@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time");
 const { ethers } = require("hardhat");
 
 module.exports = async ({ getNamedAccounts, deployments }) => {
@@ -34,12 +32,8 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
       args: [user2.address],
     });
 
-  // add ETH price oracle
   const p = new ethers.Contract(pf.address, pf.abi, await ethers.getSigner());
-  await p.addAssetOracle(
-    "0x79a6dda6dc83994a466272f1c845e6156267cf78",
-    ethAggregator.address
-  );
+  await p.addAssetOracle("0x79a6dda6dc83994a466272f1c845e6156267cf78", ethAggregator.address);
   await p.addAssetOracle(usdcMock.address, usdcAggregator.address);
 
   const iLpc = new ethers.utils.Interface(lpc.abi),
@@ -74,11 +68,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
         [fp.address, 0, fpSelectors],
         [dp.address, 0, dpSelectors],
         [lpc.address, 0, lpcSelectors],
-        [
-          lpconf.address,
-          0,
-          [iLpconf.getSighash("initPool"), iLpconf.getSighash("init")],
-        ],
+        [lpconf.address, 0, [iLpconf.getSighash("initPool"), iLpconf.getSighash("init")]],
         [lp.address, 0, lpSelectors],
       ],
       [deployer, lpconf.address, initCallData],
@@ -101,29 +91,32 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
 
   di = new ethers.Contract(diamond.address, lp.abi, user2);
 
-  await di.deposit(
-    usdcMock.address,
-    user2.address,
-    ethers.utils.parseEther("1500")
+  await di.deposit(usdcMock.address, user2.address, ethers.utils.parseEther("1500"));
+
+  await di.borrow("0x79a6dda6dc83994a466272f1c845e6156267cf78", ethers.utils.parseEther("0.5"), 0);
+
+  await increase(60 * 60 * 24 * 7); // one year
+
+  const repayAmount = ethers.utils.formatEther(
+    await di.calculateUserAmountToRepay("0x79a6dda6dc83994a466272f1c845e6156267cf78", user2.address)
   );
 
-  await di.borrow(
+  await di.repay(
     "0x79a6dda6dc83994a466272f1c845e6156267cf78",
-    ethers.utils.parseEther("0.5"),
-    0
+    ethers.utils.parseEther(repayAmount.toString()),
+    { value: ethers.utils.parseEther(repayAmount.toString()) }
   );
 
-  await di.test("0x79a6dda6dc83994a466272f1c845e6156267cf78", user2.address);
+  await increase(60 * 60 * 24 * 365); // one year
 
-  await increase(60 * 60 * 24 * 365);
-
-  await di.test("0x79a6dda6dc83994a466272f1c845e6156267cf78", user2.address);
-
-  //await di.borrow(
-  //  "0x79a6dda6dc83994a466272f1c845e6156267cf78",
-  //  ethers.utils.parseEther("0.5"),
-  //  0
-  //);
+  console.log(
+    ethers.utils.formatEther(
+      await di.calculateUserAmountToRepay(
+        "0x79a6dda6dc83994a466272f1c845e6156267cf78",
+        user2.address
+      )
+    )
+  );
 
   //await di.repay(
   //  "0x79a6dda6dc83994a466272f1c845e6156267cf78",

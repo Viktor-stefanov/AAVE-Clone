@@ -6,6 +6,8 @@ import "../libraries/WadRayMath.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "hardhat/console.sol";
 
+// @TODO rename _balanceIncrease to something like "accumulatedInterest"
+
 contract LendingPoolCore {
     using WadRayMath for uint256;
 
@@ -92,7 +94,7 @@ contract LendingPoolCore {
     function updateStateOnRepay(
         address _pool,
         address _user,
-        uint256 _paybackAmountMinusFees,
+        uint256 _paybackAmountMinusFee,
         uint256 _originationFeeRepaid,
         uint256 _balanceIncrease,
         bool _repaidWholeLoan
@@ -102,52 +104,52 @@ contract LendingPoolCore {
         updatePoolStateOnRepay(
             pool,
             _user,
-            _paybackAmountMinusFees,
+            _paybackAmountMinusFee,
             _balanceIncrease
         );
         updateUserStateOnRepay(
             pool,
             _user,
-            _paybackAmountMinusFees,
+            _paybackAmountMinusFee,
             _originationFeeRepaid,
             _balanceIncrease,
             _repaidWholeLoan
         );
 
-        updatePoolInterestRates(pool, _paybackAmountMinusFees, 0);
+        updatePoolInterestRates(pool, _paybackAmountMinusFee, 0);
     }
 
     function updatePoolStateOnRepay(
         LibFacet.Pool storage _pool,
         address _user,
-        uint256 _paybackAmountMinusFees,
+        uint256 _paybackAmountMinusFee,
         uint256 _balanceIncrease
     ) internal {
         updateCumulativeIndexes(_pool);
 
         LibFacet.InterestRateMode borrowMode = getUserCurrentBorrowRateMode(
-            _pool,
+            _pool.asset,
             _user
         );
         if (borrowMode == LibFacet.InterestRateMode.VARIABLE) {
             increaseTotalVariableBorrows(_pool, _balanceIncrease);
-            decreaseTotalVariableBorrows(_pool, _paybackAmountMinusFees);
+            decreaseTotalVariableBorrows(_pool, _paybackAmountMinusFee);
         } else {}
     }
 
     function updateUserStateOnRepay(
         LibFacet.Pool storage _pool,
         address _user,
-        uint256 _paybackAmountMinusFees,
+        uint256 _paybackAmountMinusFee,
         uint256 _originationFeeRepaid,
         uint256 _balanceIncrease,
         bool _repaidWholeLoan
     ) internal {
         LibFacet.UserPoolData storage user = _pool.users[_user];
-        user.principalBorrowBalance =
-            user.principalBorrowBalance +
-            _balanceIncrease -
-            _paybackAmountMinusFees;
+        console.log(user.principalBorrowBalance);
+        user.principalBorrowBalance -=
+            _paybackAmountMinusFee -
+            _balanceIncrease;
         user.cumulatedVariableBorrowIndex = _pool.cumulatedVariableBorrowIndex;
         if (_repaidWholeLoan) {
             user.rates.stableBorrowRate = 0;
@@ -247,6 +249,10 @@ contract LendingPoolCore {
         _pool.totalVariableBorrowLiquidity += _amount;
     }
 
+    function getPoolLiquidityRate(address _pool) public view returns (uint256) {
+        return LibFacet.lpcStorage().pools[_pool].rates.currentLiquidityRate;
+    }
+
     function getUserCurrentBorrowRateMode(LibFacet.UserPoolData memory _user)
         internal
         pure
@@ -304,7 +310,7 @@ contract LendingPoolCore {
         uint256 _optimalUtilizationRate
     )
         internal
-        view
+        pure
         returns (
             uint256 currentVariableBorrowRate,
             uint256 currentLiquidityRate
@@ -322,12 +328,6 @@ contract LendingPoolCore {
                 _variableRateSlope1 +
                 (_VariableRateSlope2.rayMul(excessUtilizationRateRatio));
         } else {
-            console.log(_totalLiquidity);
-            console.log(totalBorrows);
-            console.log(utilizationRate);
-            console.log(_optimalUtilizationRate);
-            console.log(utilizationRate.rayDiv(_optimalUtilizationRate));
-            console.log(utilizationRate / _optimalUtilizationRate);
             currentVariableBorrowRate =
                 _baseVariableBorrowRate +
                 (
@@ -335,7 +335,6 @@ contract LendingPoolCore {
                         _variableRateSlope1
                     )
                 );
-            console.log(currentVariableBorrowRate);
         }
         currentLiquidityRate = calculateOverallBorrowRate(
             _totalVariableBorrows,
@@ -394,9 +393,11 @@ contract LendingPoolCore {
         uint256 _lastUpdatedTimestamp
     ) internal pure returns (uint256) {
         uint256 ratePerSecond = _variableBorrowRate / _secondsInAYear;
+
         return
-            ratePerSecond +
-            (WadRayMath.RAY.rayPow(_timestamp - _lastUpdatedTimestamp));
+            (ratePerSecond + WadRayMath.RAY).rayPow(
+                _timestamp - _lastUpdatedTimestamp
+            );
     }
 
     /// @dev calculates interest using linear interest rate formula
@@ -461,6 +462,28 @@ contract LendingPoolCore {
         return compoundedBalance;
     }
 
+    function getUserVariableBorrowIndex(address _pool, address _user)
+        public
+        view
+        returns (uint256)
+    {
+        return
+            LibFacet
+                .lpcStorage()
+                .pools[_pool]
+                .users[_user]
+                .rates
+                .variableBorrowRate;
+    }
+
+    function getUserUsePoolAsCollateral(address _pool, address _user)
+        public
+        view
+        returns (bool)
+    {
+        return LibFacet.lpcStorage().pools[_pool].users[_user].useAsCollateral;
+    }
+
     function getUserCurrentBorrowRate(
         LibFacet.Pool storage _pool,
         address _user
@@ -477,14 +500,28 @@ contract LendingPoolCore {
                 : _pool.rates.variableBorrowRate;
     }
 
-    function getUserCurrentBorrowRateMode(
-        LibFacet.Pool storage _pool,
-        address _user
-    ) internal view returns (LibFacet.InterestRateMode) {
-        return _pool.users[_user].rates.rateMode;
+    function getUserCurrentBorrowRateMode(address _pool, address _user)
+        public
+        view
+        returns (LibFacet.InterestRateMode)
+    {
+        return LibFacet.lpcStorage().pools[_pool].users[_user].rates.rateMode;
     }
 
-    function getUserPoolData(address _pool, address _user)
+    function getUserLastUpdatedTimestamp(address _pool, address _user)
+        public
+        view
+        returns (uint256)
+    {
+        return
+            LibFacet
+                .lpcStorage()
+                .pools[_pool]
+                .users[_user]
+                .lastUpdatedTimestamp;
+    }
+
+    function getUserBasicPoolData(address _pool, address _user)
         public
         view
         returns (

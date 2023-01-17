@@ -19,7 +19,6 @@ contract LendingPoolConfigurator {
         LibFacet.facetStorage().priceFeedAddress = _pfAddress;
         LibFacet.facetStorage().dataProviderAddress = _dpAddress;
         LibFacet.facetStorage().lpcAddress = _lpcAddress;
-        LibFacet.lpcStorage().allPools = new address[](10);
     }
 
     function initPool(
@@ -54,6 +53,5 @@ contract LendingPoolConfigurator {
             pool.baseLTV = 65;
         }
         LibFacet.lpcStorage().allPools.push(_pool);
-        console.log("initialized pool state");
     }
 }

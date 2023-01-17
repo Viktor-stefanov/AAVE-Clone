@@ -9,7 +9,6 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "hardhat/console.sol";
 
 // @TODO rename _balanceIncrease to something like "accumulatedInterest"
-
 contract LendingPoolCore {
     using WadRayMath for uint256;
 
@@ -50,16 +49,17 @@ contract LendingPoolCore {
     ) public {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
         updateCumulativeIndexes(pool);
-        updatePoolInterestRates(pool, 0, _amount);
 
         uint256 liquidityProvided = pool.users[_user].liquidityProvided;
         /// TODO: substract the right amount for providedLiquidity and updatePoolInterestRates by the right amount
-        pool.providedLiquidity -= liquidityProvided;
         if (_amount > liquidityProvided) {
+            updatePoolInterestRates(pool, 0, liquidityProvided);
             pool.users[_user].liquidityProvided = 0;
+            pool.providedLiquidity -= liquidityProvided;
             pool.rewardsLiquidity -= (_amount - liquidityProvided);
-            console.log(pool.rewardsLiquidity);
         } else {
+            updatePoolInterestRates(pool, 0, _amount);
+            pool.providedLiquidity -= _amount;
             pool.users[_user].liquidityProvided -= _amount;
         }
 
@@ -696,7 +696,6 @@ contract LendingPoolCore {
                 msg.value >= _amount,
                 "The amount and the value sent to deposit do not match"
             );
-            //solium-disable-next-line
             (bool result, ) = feeProvider.call{value: _amount}("");
             require(result, "Transfer of ETH failed");
         }

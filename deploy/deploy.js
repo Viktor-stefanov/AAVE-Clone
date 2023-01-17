@@ -1,13 +1,9 @@
-const {
-  increase,
-} = require("@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time");
+const { increase } = require("@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time");
 const { ethers } = require("hardhat");
 
 module.exports = async ({ getNamedAccounts, deployments }) => {
   const { deploy } = deployments;
-  const { deployer, deployer2 } = await getNamedAccounts();
-
-  const [user1, user2, user3] = await ethers.getSigners();
+  const { deployer } = await getNamedAccounts();
 
   const lp = await deploy("LendingPool", { from: deployer, log: true }),
     lpc = await deploy("LendingPoolCore", { from: deployer, log: true }),
@@ -33,9 +29,9 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
       log: true,
     }),
     usdcMock = await deploy("UsdcMock", {
-      from: deployer2,
+      from: deployer,
       log: true,
-      args: [user2.address],
+      args: [deployer],
     });
 
   const p = new ethers.Contract(pf.address, pf.abi, await ethers.getSigner());
@@ -66,7 +62,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
       dp.address,
     ]);
 
-  const diamond = await deploy("Diamond", {
+  await deploy("Diamond", {
     from: deployer,
     log: true,
     args: [
@@ -74,89 +70,10 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
         [fp.address, 0, fpSelectors],
         [dp.address, 0, dpSelectors],
         [lpc.address, 0, lpcSelectors],
-        [
-          lpconf.address,
-          0,
-          [iLpconf.getSighash("initPool"), iLpconf.getSighash("init")],
-        ],
+        [lpconf.address, 0, [iLpconf.getSighash("initPool"), iLpconf.getSighash("init")]],
         [lp.address, 0, lpSelectors],
       ],
       [deployer, lpconf.address, initCallData],
     ],
   });
-
-  const usdcContract = new ethers.Contract(
-    usdcMock.address,
-    usdcMock.abi,
-    user2
-  );
-  await usdcContract.approve(diamond.address, ethers.utils.parseEther("1500"));
-
-  let d = new ethers.Contract(diamond.address, lpconf.abi, user1);
-  await d.initPool(ethMock.address, 18, 1);
-  await d.initPool(usdcMock.address, 18, 0);
-
-  let di = new ethers.Contract(diamond.address, lp.abi, user1);
-  await di.deposit(
-    ethMock.address,
-    user3.address,
-    ethers.utils.parseEther("5"),
-    { value: ethers.utils.parseEther("5") }
-  );
-
-  di = new ethers.Contract(diamond.address, lp.abi, user3);
-  await di.deposit(
-    ethMock.address,
-    user1.address,
-    ethers.utils.parseEther("5"),
-    { value: ethers.utils.parseEther("5") }
-  );
-
-  di = new ethers.Contract(diamond.address, lp.abi, user2);
-  await di.deposit(
-    usdcMock.address,
-    user2.address,
-    ethers.utils.parseEther("1500")
-  );
-
-  await di.borrow(ethMock.address, ethers.utils.parseEther("0.5"), 0);
-
-  await increase(60 * 60 * 24 * 365); // one year
-
-  const repayAmount = ethers.utils.formatEther(
-    await di.calculateUserAmountToRepay(ethMock.address, user2.address)
-  );
-
-  await di.repay(
-    ethMock.address,
-    ethers.utils.parseEther(repayAmount.toString()),
-    { value: ethers.utils.parseEther(repayAmount.toString()) }
-  );
-
-  let redeemAmount = await di.getUserMaxRedeemAmount(
-    ethMock.address,
-    user1.address
-  );
-  await di.redeem(ethMock.address, user1.address, redeemAmount);
-
-  await increase(60 * 60 * 24 * 365); // one year
-
-  redeemAmount = await di.getUserMaxRedeemAmount(
-    ethMock.address,
-    user3.address
-  );
-  await di.redeem(ethMock.address, user3.address, redeemAmount);
-
-  //await di.test("0x79a6dda6dc83994a466272f1c845e6156267cf78", user2.address);
-
-  //console.log(
-  //  ethers.utils.formatEther(
-  //    await di.calculateUserAmountToRepay(
-  //      "0x79a6dda6dc83994a466272f1c845e6156267cf78",
-  //      user2.address
-  //    )
-  //  )
-  //);
-
-  //di.connect(user1);
 };

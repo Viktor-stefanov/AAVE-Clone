@@ -159,6 +159,18 @@ contract DataProvider {
         return liquidityProvidedByUser.wadDiv(totalLiquidityProvided);
     }
 
+    function getAllActivePools() external view returns (address[] memory) {
+        address[] memory allPools = LibFacet.lpcStorage().allPools;
+        address[] memory activePools = new address[](allPools.length);
+        uint256 activePoolIndex = 0;
+        for (uint256 i = 0; i < allPools.length; i++) {
+            if (LibFacet.lpcStorage().pools[allPools[i]].isActive)
+                activePools[activePoolIndex++] = allPools[i];
+        }
+
+        return activePools;
+    }
+
     function calculateHealthFactorFromBalances(
         uint256 _totalCollateralBalanceETH,
         uint256 _totalBorrowBalanceETH,

@@ -2,7 +2,8 @@
   "scripts": {
     "serve": "vite --port 8080",
     "deploy": "hardhat deploy --network localhost",
-    "reset-deploy": "hardhat deploy --network localhost --reset"
+    "reset-deploy": "hardhat deploy --network localhost --reset",
+    "start-network": "hardhat node"
   },
   "dependencies": {
     "@chainlink/contracts": "^0.5.1",

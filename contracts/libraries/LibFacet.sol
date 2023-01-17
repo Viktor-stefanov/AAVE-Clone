@@ -32,9 +32,10 @@ library LibFacet {
 
     struct Pool {
         uint256 decimals;
-        uint256 totalLiquidity;
-        uint256 totalBorrowedLiquidity;
-        uint256 totalVariableBorrowLiquidity;
+        uint256 providedLiquidity;
+        uint256 borrowedLiquidity;
+        uint256 rewardsLiquidity;
+        uint256 variableBorrowLiquidity;
         uint256 cumulatedLiquidityIndex; // interest cumulated by the reserve during the time interval Dt
         uint256 reserveNormalizedIncome; // Ongoing interest cumulated by the reserve
         uint256 cumulatedVariableBorrowIndex;
@@ -47,10 +48,10 @@ library LibFacet {
         bool isUsableAsCollateral;
         bool isActive;
         bool isFreezed; // only allow repays and redeems, but not deposits, new borrowings or rate swap.
-        InterestRate rates;
-        mapping(address => UserPoolData) users;
         address asset;
+        InterestRate rates;
         address[] allUsers;
+        mapping(address => UserPoolData) users;
     }
 
     struct LPCStorage {

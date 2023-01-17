@@ -53,8 +53,7 @@ contract LendingPoolConfigurator {
             pool.loanToValue = 65;
             pool.baseLTV = 65;
         }
-        LibFacet.lpcStorage().allPools[0] = _pool;
+        LibFacet.lpcStorage().allPools.push(_pool);
         console.log("initialized pool state");
-        console.log(LibFacet.lpcStorage().allPools[0]);
     }
 }

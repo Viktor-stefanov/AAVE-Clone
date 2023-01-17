@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: No-License
 pragma solidity 0.8.17;
 
+import "./DataProvider.sol";
 import "../libraries/LibFacet.sol";
 import "../libraries/WadRayMath.sol";
+import "../mocks/EthMock.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "hardhat/console.sol";
 
@@ -29,9 +31,12 @@ contract LendingPoolCore {
         updateCumulativeIndexes(pool);
         updatePoolInterestRates(pool, _amount, 0);
         bool isFirstDeposit = pool.users[_user].liquidityProvided == 0;
-        pool.totalLiquidity += _amount;
+        pool.providedLiquidity += _amount;
+        console.log("user");
+        console.log(_user);
         pool.users[_user].liquidityProvided += _amount;
         if (isFirstDeposit) {
+            pool.allUsers.push(_user);
             setUserUsePoolAsCollateralInternal(_pool, _user, true);
             initializeUserData(pool.users[_user]);
         }
@@ -46,11 +51,27 @@ contract LendingPoolCore {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
         updateCumulativeIndexes(pool);
         updatePoolInterestRates(pool, 0, _amount);
-        /// TODO: subtract the original amount or the accumulated amount?
-        pool.totalLiquidity -= _amount;
-        pool.users[_user].liquidityProvided -= _amount;
-        if (_userRedeemedEverything)
+
+        uint256 liquidityProvided = pool.users[_user].liquidityProvided;
+        /// TODO: substract the right amount for providedLiquidity and updatePoolInterestRates by the right amount
+        pool.providedLiquidity -= liquidityProvided;
+        if (_amount > liquidityProvided) {
+            pool.users[_user].liquidityProvided = 0;
+            pool.rewardsLiquidity -= (_amount - liquidityProvided);
+            console.log(pool.rewardsLiquidity);
+        } else {
+            pool.users[_user].liquidityProvided -= _amount;
+        }
+
+        if (_userRedeemedEverything) {
             setUserUsePoolAsCollateralInternal(_pool, _user, false);
+            pool.users[_user].rates.variableBorrowRate = 0;
+            pool.users[_user].rates.stableBorrowRate = 0;
+            pool.users[_user].rates.stableBorrowRate = 0;
+            pool.users[_user].rates.cumulatedVariableBorrowIndex =
+                1 *
+                WadRayMath.RAY;
+        }
     }
 
     function updateStateOnBorrow(
@@ -126,6 +147,8 @@ contract LendingPoolCore {
         uint256 _balanceIncrease
     ) internal {
         updateCumulativeIndexes(_pool);
+        _pool.rewardsLiquidity += _balanceIncrease;
+        _pool.borrowedLiquidity -= _paybackAmountMinusFee - _balanceIncrease;
 
         LibFacet.InterestRateMode borrowMode = getUserCurrentBorrowRateMode(
             _pool.asset,
@@ -146,7 +169,6 @@ contract LendingPoolCore {
         bool _repaidWholeLoan
     ) internal {
         LibFacet.UserPoolData storage user = _pool.users[_user];
-        console.log(user.principalBorrowBalance);
         user.principalBorrowBalance -=
             _paybackAmountMinusFee -
             _balanceIncrease;
@@ -176,6 +198,7 @@ contract LendingPoolCore {
             _amountBorrowed,
             _rateMode
         );
+        _pool.borrowedLiquidity += _amountBorrowed;
     }
 
     // TODO: ADD previous values of indexes to the Pool and UserPoolData structs.
@@ -236,17 +259,17 @@ contract LendingPoolCore {
         uint256 _amount
     ) internal {
         require(
-            _pool.totalVariableBorrowLiquidity >= _amount,
+            _pool.variableBorrowLiquidity >= _amount,
             "The amount that is being subtracted from the variable borrows is incorrect."
         );
-        _pool.totalVariableBorrowLiquidity -= _amount;
+        _pool.variableBorrowLiquidity -= _amount;
     }
 
     function increaseTotalVariableBorrows(
         LibFacet.Pool storage _pool,
         uint256 _amount
     ) internal {
-        _pool.totalVariableBorrowLiquidity += _amount;
+        _pool.variableBorrowLiquidity += _amount;
     }
 
     function getPoolLiquidityRate(address _pool) public view returns (uint256) {
@@ -268,7 +291,7 @@ contract LendingPoolCore {
     }
 
     function updateCumulativeIndexes(LibFacet.Pool storage _pool) internal {
-        if (_pool.totalBorrowedLiquidity > 0) {
+        if (_pool.borrowedLiquidity > 0) {
             _pool.cumulatedLiquidityIndex = calculateLinearInterest(
                 _pool.rates.currentLiquidityRate,
                 _pool.lastUpdatedTimestamp
@@ -291,8 +314,8 @@ contract LendingPoolCore {
             _pool.rates.variableBorrowRate,
             _pool.rates.currentLiquidityRate
         ) = calculateInterestRates(
-            _pool.totalLiquidity + _liquidityAdded - _liquidityTaken,
-            _pool.totalVariableBorrowLiquidity,
+            _pool.providedLiquidity + _liquidityAdded - _liquidityTaken,
+            _pool.variableBorrowLiquidity,
             _pool.rates.interestRateSlopeBelow,
             _pool.rates.interestRateSlopeAbove,
             _pool.rates.baseVariableBorrowRate,
@@ -443,12 +466,6 @@ contract LendingPoolCore {
             ).rayMul(_pool.cumulatedVariableBorrowIndex).rayDiv(
                     _user.cumulatedVariableBorrowIndex
                 );
-
-            console.log(_pool.rates.variableBorrowRate);
-            console.log(_pool.cumulatedVariableBorrowIndex);
-            console.log(_user.cumulatedVariableBorrowIndex);
-            console.log("cumulated interest: ");
-            console.log(cumulatedInterest);
         }
 
         compoundedBalance = principalBorrowBalance
@@ -532,6 +549,8 @@ contract LendingPoolCore {
         )
     {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
+        /// Q: How to compound the deposited balance? Don't return just the 'principal' amount.
+        /// A: Store the compounded interest from loans and distribute it amongst the depositors based on their share.
         uint256 assetBalance = pool.users[_user].liquidityProvided;
         if (pool.users[_user].principalBorrowBalance == 0)
             return (assetBalance, 0, 0, pool.users[_user].useAsCollateral);
@@ -542,6 +561,24 @@ contract LendingPoolCore {
             pool.users[_user].originationFee,
             pool.users[_user].useAsCollateral
         );
+    }
+
+    function getUserCumulatedRewards(address _pool, address _user)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 userShare = DataProvider(address(this)).getUserRewardShare(
+            _pool,
+            _user
+        );
+        uint256 totalRewards = LibFacet
+            .lpcStorage()
+            .pools[_pool]
+            .rewardsLiquidity;
+
+        /// @dev: divide by 10**18 because userShare is in wei and not a fractional number
+        return (totalRewards * userShare) / 10**18;
     }
 
     function getPoolConfiguration(address _pool)
@@ -567,12 +604,25 @@ contract LendingPoolCore {
         return LibFacet.lpcStorage().pools[_pool].decimals;
     }
 
+    function getPoolCumulatedRewards(address _pool)
+        public
+        view
+        returns (uint256)
+    {
+        return LibFacet.lpcStorage().pools[_pool].rewardsLiquidity;
+    }
+
     function getPoolAvailableLiquidity(address _pool)
         public
         view
         returns (uint256)
     {
-        return LibFacet.lpcStorage().pools[_pool].totalLiquidity;
+        console.log("here");
+        console.log(LibFacet.lpcStorage().pools[_pool].rewardsLiquidity);
+        return
+            LibFacet.lpcStorage().pools[_pool].providedLiquidity +
+            LibFacet.lpcStorage().pools[_pool].rewardsLiquidity -
+            LibFacet.lpcStorage().pools[_pool].borrowedLiquidity;
     }
 
     function isPoolBorrowingEnabled(address _pool) public view returns (bool) {
@@ -623,8 +673,7 @@ contract LendingPoolCore {
         uint256 _amount
     ) public {
         if (_pool == LibFacet.facetStorage().ethAddress) {
-            (bool success, ) = _user.call{value: _amount}("");
-            require(success, "Error while sending ETH.");
+            EthMock(payable(_pool)).transferEthToUser(_user, _amount);
         } else {
             ERC20(_pool).transferFrom(_pool, _user, _amount);
         }

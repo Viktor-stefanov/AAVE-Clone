@@ -137,6 +137,28 @@ contract DataProvider {
         );
     }
 
+    function getUserRewardShare(address _pool, address _user)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 liquidityProvidedByUser = LibFacet
+            .lpcStorage()
+            .pools[_pool]
+            .users[_user]
+            .liquidityProvided;
+        if (liquidityProvidedByUser == 0) return 0;
+
+        uint256 totalLiquidityProvided = 0;
+        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
+        for (uint256 userIdx = 0; userIdx < pool.allUsers.length; userIdx++)
+            totalLiquidityProvided += pool
+                .users[pool.allUsers[userIdx]]
+                .liquidityProvided;
+
+        return liquidityProvidedByUser.wadDiv(totalLiquidityProvided);
+    }
+
     function calculateHealthFactorFromBalances(
         uint256 _totalCollateralBalanceETH,
         uint256 _totalBorrowBalanceETH,

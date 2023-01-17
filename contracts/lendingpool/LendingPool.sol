@@ -18,11 +18,11 @@ contract LendingPool {
             "Insufficient token balance."
         );
 
-        LendingPoolCore(address(this)).updateStateOnDeposit(
-            _pool,
-            msg.sender,
-            _amount
-        );
+        LendingPoolCore core = LendingPoolCore(address(this));
+
+        core.updateStateOnDeposit(_pool, _user, _amount);
+
+        core.transferToPool(_pool, _user, _amount);
     }
 
     function redeem(
@@ -30,16 +30,17 @@ contract LendingPool {
         address _user,
         uint256 _amount
     ) external {
-        console.log("redeeming");
         LendingPoolCore core = LendingPoolCore(address(this));
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
+        console.log(core.getPoolAvailableLiquidity(_pool));
+        console.log(_amount);
         require(
-            pool.totalLiquidity >= _amount,
+            core.getPoolAvailableLiquidity(_pool) >= _amount,
             "There is not enough liquidity available to redeem."
         );
         core.updateStateOnRedeem(
             _pool,
-            msg.sender,
+            _user,
             _amount,
             _amount == pool.users[_user].liquidityProvided
         );
@@ -166,7 +167,7 @@ contract LendingPool {
 
         require(
             vars.compoundedBorrowBalance > 0,
-            "The user does nto have any borrow pending."
+            "The user does not have any borrow pending."
         );
 
         /// @note default behavior is to repay the full loan
@@ -194,14 +195,7 @@ contract LendingPool {
         }
 
         vars.paybackAmountMinusFee = vars.paybackAmount - vars.originationFee;
-        console.log("amount:");
-        console.log(_amount);
 
-        console.log("please");
-        console.log(vars.paybackAmount);
-        console.log(vars.compoundedBorrowBalance);
-        console.log(vars.principalBorrowBalance);
-        console.log(vars.originationFee);
         core.updateStateOnRepay(
             _pool,
             msg.sender,
@@ -217,9 +211,7 @@ contract LendingPool {
             }(_pool, msg.sender, vars.originationFee);
         }
 
-        core.transferToPool{
-            value: vars.isETH ? msg.value - vars.originationFee : 0
-        }(_pool, msg.sender, vars.paybackAmountMinusFee);
+        core.transferToPool(_pool, msg.sender, vars.paybackAmountMinusFee);
     }
 
     function setUserUsePoolAsCollateral(address _pool, bool _useAsCollateral)
@@ -241,41 +233,56 @@ contract LendingPool {
         );
     }
 
-    /// TODO: why do we take the origination fee from the compounded balance and not the principal amount?
+    // Q: why do we take the origination fee from the compounded balance and not the principal amount?
+    // A: because that is an implementation detail and the original AAVE protocol leaves this part out to the government module
     function calculateUserAmountToRepay(address _pool, address _user)
         public
         view
         returns (uint256)
     {
-        (
-            uint256 principalBorrowBalance,
-            uint256 compoundedBorrowBalance,
-
-        ) = LendingPoolCore(address(this)).getUserBorrowBalances(_pool, _user);
+        (, uint256 compoundedBorrowBalance, ) = LendingPoolCore(address(this))
+            .getUserBorrowBalances(_pool, _user);
         uint256 originationFee = FeeProvider(address(this))
             .calculateLoanOriginationFee(compoundedBorrowBalance);
 
         return compoundedBorrowBalance + originationFee;
     }
 
+    function liquidationCall(address _pool, address _userToLiquidate)
+        external
+        payable
+    {}
+
+    function getUserMaxRedeemAmount(address _pool, address _user)
+        public
+        view
+        returns (uint256)
+    {
+        return
+            LendingPoolCore(address(this)).getUserCumulatedRewards(
+                _pool,
+                _user
+            ) +
+            LibFacet.lpcStorage().pools[_pool].users[_user].liquidityProvided;
+    }
+
     function test(address _pool, address _user) public view {
-        (
-            uint256 currentBorrowBalance,
-            uint256 principalBorrowBalance,
-            uint256 liquidityRate,
-            uint256 originationFee,
-            uint256 variableBorrowIndex,
-            uint256 lastUpdatedTimestamp,
-            LibFacet.InterestRateMode borrowRate,
-            bool usageAsCollateralEnabled
-        ) = DataProvider(address(this)).getUserPoolData(_pool, _user);
-        console.log("\n");
-        console.log(principalBorrowBalance);
-        console.log(currentBorrowBalance);
-        console.log(currentBorrowBalance - principalBorrowBalance);
-        console.log(currentBorrowBalance + originationFee);
-        console.log(originationFee);
-        console.log(liquidityRate);
-        console.log(variableBorrowIndex);
+        //(
+        //    uint256 currentBorrowBalance,
+        //    uint256 principalBorrowBalance,
+        //    uint256 liquidityRate,
+        //    uint256 originationFee,
+        //    uint256 variableBorrowIndex,
+        //    ,
+        //    ,
+        //) = DataProvider(address(this)).getUserPoolData(_pool, _user);
+        //console.log("\n");
+        //console.log(principalBorrowBalance);
+        //console.log(currentBorrowBalance);
+        //console.log(currentBorrowBalance - principalBorrowBalance);
+        //console.log(currentBorrowBalance + originationFee);
+        //console.log(originationFee);
+        //console.log(liquidityRate);
+        //console.log(variableBorrowIndex);
     }
 }

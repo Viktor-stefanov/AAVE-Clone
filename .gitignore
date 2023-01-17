@@ -4,4 +4,4 @@ cache
 artifacts
 todo.txt
 learned.txt
-compiler
+.vscode

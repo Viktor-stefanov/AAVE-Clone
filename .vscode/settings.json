@@ -1,5 +1,5 @@
 {
   "solidity.defaultCompiler": "localFile",
   "solidity.compileUsingRemoteVersion": "v0.8.17+commit.8df45f5f",
-  "solidity.compileUsingLocalVersion": "/home/viktor/Dev/Blockchain/AAVE-Clone/compiler/soljson-v0.8.17+commit.8df45f5f.js"
+  "solidity.compileUsingLocalVersion": "/home/viktor02/Dev/Blockchain/AAVE-Clone/compiler/soljson-v0.8.17+commit.8df45f5f.js"
 }

@@ -11,6 +11,9 @@ module.exports = {
     deployer: {
       default: 0,
     },
+    deployer2: {
+      default: 1,
+    },
   },
   solidity: {
     version: "0.8.17",

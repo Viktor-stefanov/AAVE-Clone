@@ -1,4 +1,6 @@
-const { increase } = require("@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time");
+const {
+  increase,
+} = require("@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time");
 const { ethers } = require("hardhat");
 
 module.exports = async ({ getNamedAccounts, deployments }) => {
@@ -31,7 +33,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     usdcMock = await deploy("UsdcMock", {
       from: deployer,
       log: true,
-      args: [deployer],
+      args: [(await ethers.getSigners())[1].address],
     });
 
   const p = new ethers.Contract(pf.address, pf.abi, await ethers.getSigner());
@@ -62,7 +64,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
       dp.address,
     ]);
 
-  await deploy("Diamond", {
+  const diamond = await deploy("Diamond", {
     from: deployer,
     log: true,
     args: [
@@ -70,10 +72,85 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
         [fp.address, 0, fpSelectors],
         [dp.address, 0, dpSelectors],
         [lpc.address, 0, lpcSelectors],
-        [lpconf.address, 0, [iLpconf.getSighash("initPool"), iLpconf.getSighash("init")]],
+        [
+          lpconf.address,
+          0,
+          [iLpconf.getSighash("initPool"), iLpconf.getSighash("init")],
+        ],
         [lp.address, 0, lpSelectors],
       ],
       [deployer, lpconf.address, initCallData],
     ],
   });
+
+  const d = new ethers.Contract(
+    diamond.address,
+    lpconf.abi,
+    await ethers.getSigner()
+  );
+
+  await d.initPool(ethMock.address, "ETH", 18, 1);
+  await d.initPool(usdcMock.address, "USDC", 18, 0);
+
+  const di = new ethers.Contract(
+    diamond.address,
+    lp.abi,
+    (await ethers.getSigners())[0]
+  );
+
+  await di.deposit(
+    ethMock.address,
+    (
+      await ethers.getSigners()
+    )[0].address,
+    ethers.utils.parseEther("5"),
+    { value: ethers.utils.parseEther("5") }
+  );
+
+  const dia = new ethers.Contract(
+    diamond.address,
+    lp.abi,
+    (await ethers.getSigners())[1]
+  );
+
+  const usdc = new ethers.Contract(
+    usdcMock.address,
+    usdcMock.abi,
+    (await ethers.getSigners())[1]
+  );
+  await usdc.increaseAllowance(dia.address, ethers.utils.parseEther("6000"));
+
+  await dia.deposit(
+    usdcMock.address,
+    (
+      await ethers.getSigners()
+    )[1].address,
+    ethers.utils.parseEther("6000")
+  );
+
+  await dia.borrow(ethMock.address, ethers.utils.parseEther("2"), 0);
+
+  //console.log(await dia.test(ethMock.address));
+
+  //increase(60 * 60 * 24 * 365);
+
+  //const repayAmount = await dia.calculateUserAmountToRepay(
+  //  ethMock.address,
+  //  (
+  //    await ethers.getSigners()
+  //  )[1].address
+  //);
+
+  //console.log(repayAmount);
+
+  //await dia.repay(ethMock.address, repayAmount, { value: repayAmount });
+
+  //console.log(
+  //  await di.getUserMaxRedeemAmount(
+  //    ethMock.address,
+  //    (
+  //      await ethers.getSigners()
+  //    )[0].address
+  //  )
+  //);
 };

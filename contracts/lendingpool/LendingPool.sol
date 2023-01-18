@@ -266,7 +266,7 @@ contract LendingPool {
             LibFacet.lpcStorage().pools[_pool].users[_user].liquidityProvided;
     }
 
-    function test(address _pool, address _user) public view {
+    function test(address _pool) public view {
         //(
         //    uint256 currentBorrowBalance,
         //    uint256 principalBorrowBalance,
@@ -284,5 +284,8 @@ contract LendingPool {
         //console.log(originationFee);
         //console.log(liquidityRate);
         //console.log(variableBorrowIndex);
+        console.log(
+            LibFacet.lpcStorage().pools[_pool].rates.variableBorrowRate
+        );
     }
 }

@@ -23,11 +23,12 @@ contract LendingPoolConfigurator {
 
     function initPool(
         address _pool,
+        string memory _asset,
         uint256 _decimals,
         LibFacet.TokenVolatility _volatility
     ) external {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
-        pool.asset = _pool;
+        pool.asset = _asset;
         pool.decimals = _decimals;
         pool.cumulatedLiquidityIndex = WadRayMath.RAY;
         pool.cumulatedVariableBorrowIndex = WadRayMath.RAY;
@@ -36,19 +37,21 @@ contract LendingPoolConfigurator {
         pool.isUsableAsCollateral = true;
         pool.lastUpdatedTimestamp = block.timestamp;
         if (_volatility == LibFacet.TokenVolatility.LOW) {
-            pool.rates.interestRateSlopeAbove = 110 * WadRayMath.RAY;
-            pool.rates.interestRateSlopeBelow = 5 * WadRayMath.RAY;
-            pool.rates.baseVariableBorrowRate = 1 * WadRayMath.RAY;
-            pool.rates.targetUtilisationRate = 85 * WadRayMath.RAY;
+            pool.rates.interestRateSlopeAbove = 60 * WadRayMath.RAY;
+            pool.rates.interestRateSlopeBelow = 4 * WadRayMath.RAY;
+            pool.rates.baseVariableBorrowRate = 0 * WadRayMath.RAY;
+            pool.rates.targetUtilisationRate = (90 * WadRayMath.RAY) / 100; // * 0.9
             pool.liquidationThreshold = 90; /// TODO: consider if this is a good default value
+            pool.liquidationBonus = 10;
             pool.loanToValue = 85;
             pool.baseLTV = 85;
         } else if (_volatility == LibFacet.TokenVolatility.HIGH) {
-            pool.rates.interestRateSlopeAbove = 250 * WadRayMath.RAY;
-            pool.rates.interestRateSlopeBelow = 8 * WadRayMath.RAY;
+            pool.rates.interestRateSlopeAbove = (100 * WadRayMath.RAY); // / 100;
+            pool.rates.interestRateSlopeBelow = (8 * WadRayMath.RAY); // / 100;
             pool.rates.baseVariableBorrowRate = 0;
-            pool.rates.targetUtilisationRate = 70 * WadRayMath.RAY;
+            pool.rates.targetUtilisationRate = (65 * WadRayMath.RAY); // / 100;
             pool.liquidationThreshold = 70;
+            pool.liquidationBonus = 5;
             pool.loanToValue = 65;
             pool.baseLTV = 65;
         }

@@ -31,8 +31,6 @@ contract LendingPoolCore {
         updatePoolInterestRates(pool, _amount, 0);
         bool isFirstDeposit = pool.users[_user].liquidityProvided == 0;
         pool.providedLiquidity += _amount;
-        console.log("user");
-        console.log(_user);
         pool.users[_user].liquidityProvided += _amount;
         if (isFirstDeposit) {
             pool.allUsers.push(_user);
@@ -51,7 +49,6 @@ contract LendingPoolCore {
         updateCumulativeIndexes(pool);
 
         uint256 liquidityProvided = pool.users[_user].liquidityProvided;
-        /// TODO: substract the right amount for providedLiquidity and updatePoolInterestRates by the right amount
         if (_amount > liquidityProvided) {
             updatePoolInterestRates(pool, 0, liquidityProvided);
             pool.users[_user].liquidityProvided = 0;
@@ -124,6 +121,7 @@ contract LendingPoolCore {
 
         updatePoolStateOnRepay(
             pool,
+            _pool,
             _user,
             _paybackAmountMinusFee,
             _balanceIncrease
@@ -142,6 +140,7 @@ contract LendingPoolCore {
 
     function updatePoolStateOnRepay(
         LibFacet.Pool storage _pool,
+        address _poolAddress,
         address _user,
         uint256 _paybackAmountMinusFee,
         uint256 _balanceIncrease
@@ -151,7 +150,7 @@ contract LendingPoolCore {
         _pool.borrowedLiquidity -= _paybackAmountMinusFee - _balanceIncrease;
 
         LibFacet.InterestRateMode borrowMode = getUserCurrentBorrowRateMode(
-            _pool.asset,
+            _poolAddress,
             _user
         );
         if (borrowMode == LibFacet.InterestRateMode.VARIABLE) {
@@ -321,6 +320,7 @@ contract LendingPoolCore {
             _pool.rates.baseVariableBorrowRate,
             _pool.rates.targetUtilisationRate
         );
+        _pool.rates.overallBorrowRate = _pool.rates.variableBorrowRate;
         _pool.lastUpdatedTimestamp = block.timestamp;
     }
 
@@ -328,12 +328,12 @@ contract LendingPoolCore {
         uint256 _totalLiquidity,
         uint256 _totalVariableBorrows,
         uint256 _variableRateSlope1,
-        uint256 _VariableRateSlope2,
+        uint256 _variableRateSlope2,
         uint256 _baseVariableBorrowRate,
         uint256 _optimalUtilizationRate
     )
         internal
-        pure
+        view
         returns (
             uint256 currentVariableBorrowRate,
             uint256 currentLiquidityRate
@@ -342,14 +342,20 @@ contract LendingPoolCore {
         uint256 totalBorrows = _totalVariableBorrows; /// @dev + totalStableBorrows
         uint256 utilizationRate = (_totalLiquidity == 0 && totalBorrows == 0)
             ? 0
-            : totalBorrows.rayDiv(_totalLiquidity);
-        if (utilizationRate > _optimalUtilizationRate) {
+            : (totalBorrows * 10**8) / _totalLiquidity;
+        if (utilizationRate > _optimalUtilizationRate / 100) {
             uint256 excessUtilizationRateRatio = (utilizationRate -
-                _optimalUtilizationRate).rayDiv(1 - _optimalUtilizationRate);
+                _optimalUtilizationRate).rayDiv(
+                    (WadRayMath.RAY * 100) - _optimalUtilizationRate
+                );
+            console.log(_variableRateSlope1);
+            console.log(_variableRateSlope2);
+            console.log(excessUtilizationRateRatio);
+            console.log(_variableRateSlope2.rayMul(excessUtilizationRateRatio));
             currentVariableBorrowRate =
                 _baseVariableBorrowRate +
                 _variableRateSlope1 +
-                (_VariableRateSlope2.rayMul(excessUtilizationRateRatio));
+                (_variableRateSlope2.rayMul(excessUtilizationRateRatio));
         } else {
             currentVariableBorrowRate =
                 _baseVariableBorrowRate +
@@ -359,10 +365,16 @@ contract LendingPoolCore {
                     )
                 );
         }
-        currentLiquidityRate = calculateOverallBorrowRate(
+        uint256 overallBorrowRate = calculateOverallBorrowRate(
             _totalVariableBorrows,
             currentVariableBorrowRate
-        ).rayMul(utilizationRate);
+        );
+        currentLiquidityRate = overallBorrowRate.rayMul(utilizationRate);
+        console.log("Here:");
+        console.log(utilizationRate);
+        console.log(currentVariableBorrowRate);
+        console.log(overallBorrowRate);
+        console.log(currentLiquidityRate);
     }
 
     function calculateOverallBorrowRate(
@@ -457,7 +469,6 @@ contract LendingPoolCore {
         uint256 cumulatedInterest = 0;
 
         if (_user.rates.stableBorrowRate > 0) {} else {
-            // variable interest
             cumulatedInterest = calculateCompoundedInterest(
                 _pool.rates.variableBorrowRate,
                 LibFacet.SECONDS_IN_A_YEAR,
@@ -581,14 +592,66 @@ contract LendingPoolCore {
         return (totalRewards * userShare) / 10**18;
     }
 
+    function getPoolDepositInformation(address _pool)
+        public
+        view
+        returns (
+            string memory asset,
+            uint256 depositedLiquidity,
+            uint256 borrowedLiquidity,
+            uint256 overallBorrowRate,
+            uint256 currentLiquidityRate,
+            bool isUsableAsCollateral
+        )
+    {
+        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
+        return (
+            pool.asset,
+            pool.providedLiquidity,
+            pool.borrowedLiquidity,
+            pool.rates.overallBorrowRate,
+            pool.rates.currentLiquidityRate,
+            pool.isUsableAsCollateral
+        );
+    }
+
+    function getPoolDisplayInformation(address _pool)
+        public
+        view
+        returns (
+            string memory,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            uint256,
+            bool,
+            bool,
+            bool
+        )
+    {
+        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
+        return (
+            pool.asset,
+            pool.loanToValue,
+            pool.liquidationThreshold,
+            pool.liquidationBonus,
+            pool.providedLiquidity,
+            pool.borrowedLiquidity,
+            pool.isBorrowingEnabled,
+            pool.isUsableAsCollateral,
+            pool.isActive
+        );
+    }
+
     function getPoolConfiguration(address _pool)
         public
         view
         returns (
-            uint256 reserveDecimals,
-            uint256 baseLTV,
-            uint256 liquidationTHreshold,
-            bool usageAsCollateralEnabled
+            uint256,
+            uint256,
+            uint256,
+            bool
         )
     {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
@@ -617,8 +680,6 @@ contract LendingPoolCore {
         view
         returns (uint256)
     {
-        console.log("here");
-        console.log(LibFacet.lpcStorage().pools[_pool].rewardsLiquidity);
         return
             LibFacet.lpcStorage().pools[_pool].providedLiquidity +
             LibFacet.lpcStorage().pools[_pool].rewardsLiquidity -

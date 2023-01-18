@@ -171,6 +171,71 @@ contract DataProvider {
         return activePools;
     }
 
+    function getAllActivePoolAssetNames()
+        external
+        view
+        returns (string[] memory)
+    {
+        address[] memory allPools = LibFacet.lpcStorage().allPools;
+        string[] memory activePools = new string[](allPools.length);
+        uint256 activePoolIndex = 0;
+        for (uint256 i = 0; i < allPools.length; i++) {
+            if (LibFacet.lpcStorage().pools[allPools[i]].isActive)
+                activePools[activePoolIndex++] = LibFacet
+                    .lpcStorage()
+                    .pools[allPools[i]]
+                    .asset;
+        }
+
+        return activePools;
+    }
+
+    function getPoolDisplayData(address _pool)
+        external
+        view
+        returns (
+            string memory asset,
+            uint256 loanToValue,
+            uint256 liquidationThreshold,
+            uint256 liquidationBonus,
+            uint256 depositedLiquidity,
+            uint256 borrowedLiquidity,
+            bool isBorrowingEnabled,
+            bool isUsableAsCollateral,
+            bool isActive
+        )
+    {
+        return LendingPoolCore(address(this)).getPoolDisplayInformation(_pool);
+    }
+
+    function getPoolDepositData(address _pool)
+        external
+        view
+        returns (
+            string memory asset,
+            uint256 depositedLiquidity,
+            uint256 borrowedLiquidity,
+            uint256 overallBorrowRate,
+            uint256 currentLiquidityRate,
+            uint256 depositAPY,
+            bool isUsableAsCollateral
+        )
+    {
+        (
+            asset,
+            depositedLiquidity,
+            borrowedLiquidity,
+            overallBorrowRate,
+            currentLiquidityRate,
+            isUsableAsCollateral
+        ) = LendingPoolCore(address(this)).getPoolDepositInformation(_pool);
+        depositAPY =
+            ((currentLiquidityRate / LibFacet.SECONDS_IN_A_YEAR) +
+                WadRayMath.RAY).rayPow(LibFacet.SECONDS_IN_A_YEAR) -
+            WadRayMath.RAY;
+        console.log(depositAPY);
+    }
+
     function calculateHealthFactorFromBalances(
         uint256 _totalCollateralBalanceETH,
         uint256 _totalBorrowBalanceETH,

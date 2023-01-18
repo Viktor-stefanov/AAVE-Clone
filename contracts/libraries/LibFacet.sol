@@ -31,6 +31,7 @@ library LibFacet {
     }
 
     struct Pool {
+        string asset;
         uint256 decimals;
         uint256 providedLiquidity;
         uint256 borrowedLiquidity;
@@ -48,7 +49,6 @@ library LibFacet {
         bool isUsableAsCollateral;
         bool isActive;
         bool isFreezed; // only allow repays and redeems, but not deposits, new borrowings or rate swap.
-        address asset;
         InterestRate rates;
         address[] allUsers;
         mapping(address => UserPoolData) users;

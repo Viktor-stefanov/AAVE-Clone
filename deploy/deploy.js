@@ -98,14 +98,9 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     (await ethers.getSigners())[0]
   );
 
-  await di.deposit(
-    ethMock.address,
-    (
-      await ethers.getSigners()
-    )[0].address,
-    ethers.utils.parseEther("5"),
-    { value: ethers.utils.parseEther("5") }
-  );
+  await di.deposit(ethMock.address, ethers.utils.parseEther("5"), {
+    value: ethers.utils.parseEther("5"),
+  });
 
   const dia = new ethers.Contract(
     diamond.address,
@@ -120,19 +115,13 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   );
   await usdc.increaseAllowance(dia.address, ethers.utils.parseEther("6000"));
 
-  await dia.deposit(
-    usdcMock.address,
-    (
-      await ethers.getSigners()
-    )[1].address,
-    ethers.utils.parseEther("6000")
-  );
+  await dia.deposit(usdcMock.address, ethers.utils.parseEther("6000"));
 
   await dia.borrow(ethMock.address, ethers.utils.parseEther("2"), 0);
 
-  //console.log(await dia.test(ethMock.address));
+  //await di.test(ethMock.address, deployer);
 
-  //increase(60 * 60 * 24 * 365);
+  //await increase(60 * 60 * 24 * 365);
 
   //const repayAmount = await dia.calculateUserAmountToRepay(
   //  ethMock.address,

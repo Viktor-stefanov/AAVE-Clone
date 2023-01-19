@@ -6,23 +6,21 @@ import "../libraries/LibFacet.sol";
 import "hardhat/console.sol";
 
 contract LendingPool {
-    function deposit(
-        address _pool,
-        address _user,
-        uint256 _amount
-    ) external payable {
+    using WadRayMath for uint256;
+
+    function deposit(address _pool, uint256 _amount) external payable {
         require(
             _pool == LibFacet.facetStorage().ethAddress
-                ? _user.balance >= _amount
-                : ERC20(_pool).balanceOf(_user) >= _amount,
+                ? msg.sender.balance >= _amount
+                : ERC20(_pool).balanceOf(msg.sender) >= _amount,
             "Insufficient token balance."
         );
 
         LendingPoolCore core = LendingPoolCore(address(this));
 
-        core.updateStateOnDeposit(_pool, _user, _amount);
+        core.updateStateOnDeposit(_pool, msg.sender, _amount);
 
-        core.transferToPool(_pool, _user, _amount);
+        core.transferToPool(_pool, msg.sender, _amount);
     }
 
     function redeem(
@@ -32,11 +30,13 @@ contract LendingPool {
     ) external {
         LendingPoolCore core = LendingPoolCore(address(this));
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
-        console.log(core.getPoolAvailableLiquidity(_pool));
-        console.log(_amount);
         require(
             core.getPoolAvailableLiquidity(_pool) >= _amount,
             "There is not enough liquidity available to redeem."
+        );
+        require(
+            _amount <= getUserMaxRedeemAmount(_pool, _user),
+            "User cannot redeem more than the accumulated interest."
         );
         core.updateStateOnRedeem(
             _pool,
@@ -261,31 +261,9 @@ contract LendingPool {
         return
             LendingPoolCore(address(this)).getUserCumulatedRewards(
                 _pool,
-                _user
+                _user,
+                LibFacet.lpcStorage().pools[_pool].rewardsLiquidity
             ) +
             LibFacet.lpcStorage().pools[_pool].users[_user].liquidityProvided;
-    }
-
-    function test(address _pool) public view {
-        //(
-        //    uint256 currentBorrowBalance,
-        //    uint256 principalBorrowBalance,
-        //    uint256 liquidityRate,
-        //    uint256 originationFee,
-        //    uint256 variableBorrowIndex,
-        //    ,
-        //    ,
-        //) = DataProvider(address(this)).getUserPoolData(_pool, _user);
-        //console.log("\n");
-        //console.log(principalBorrowBalance);
-        //console.log(currentBorrowBalance);
-        //console.log(currentBorrowBalance - principalBorrowBalance);
-        //console.log(currentBorrowBalance + originationFee);
-        //console.log(originationFee);
-        //console.log(liquidityRate);
-        //console.log(variableBorrowIndex);
-        console.log(
-            LibFacet.lpcStorage().pools[_pool].rates.variableBorrowRate
-        );
     }
 }

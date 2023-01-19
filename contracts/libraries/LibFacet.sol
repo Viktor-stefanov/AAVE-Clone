@@ -9,6 +9,7 @@ import "hardhat/console.sol";
 
 library LibFacet {
     uint256 internal constant SECONDS_IN_A_YEAR = 365 days;
+    uint256 internal constant RATE_MULTIPLIER = 10**8;
     bytes32 internal constant LENDING_POOL_CORE_STORAGE_POSITION =
         keccak256("diamonds.standart.lending.pool.core.storage");
     bytes32 internal constant FACET_STORAGE_POSITION =

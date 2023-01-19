@@ -333,7 +333,7 @@ contract LendingPoolCore {
         uint256 _optimalUtilizationRate
     )
         internal
-        view
+        pure
         returns (
             uint256 currentVariableBorrowRate,
             uint256 currentLiquidityRate
@@ -342,16 +342,13 @@ contract LendingPoolCore {
         uint256 totalBorrows = _totalVariableBorrows; /// @dev + totalStableBorrows
         uint256 utilizationRate = (_totalLiquidity == 0 && totalBorrows == 0)
             ? 0
-            : (totalBorrows * 10**8) / _totalLiquidity;
-        if (utilizationRate > _optimalUtilizationRate / 100) {
+            : totalBorrows.rayDiv(_totalLiquidity);
+
+        if (utilizationRate > _optimalUtilizationRate) {
             uint256 excessUtilizationRateRatio = (utilizationRate -
                 _optimalUtilizationRate).rayDiv(
-                    (WadRayMath.RAY * 100) - _optimalUtilizationRate
+                    WadRayMath.RAY - _optimalUtilizationRate
                 );
-            console.log(_variableRateSlope1);
-            console.log(_variableRateSlope2);
-            console.log(excessUtilizationRateRatio);
-            console.log(_variableRateSlope2.rayMul(excessUtilizationRateRatio));
             currentVariableBorrowRate =
                 _baseVariableBorrowRate +
                 _variableRateSlope1 +
@@ -370,11 +367,6 @@ contract LendingPoolCore {
             currentVariableBorrowRate
         );
         currentLiquidityRate = overallBorrowRate.rayMul(utilizationRate);
-        console.log("Here:");
-        console.log(utilizationRate);
-        console.log(currentVariableBorrowRate);
-        console.log(overallBorrowRate);
-        console.log(currentLiquidityRate);
     }
 
     function calculateOverallBorrowRate(
@@ -420,17 +412,18 @@ contract LendingPoolCore {
         return LibFacet.lpcStorage().pools[_pool].users[_user].originationFee;
     }
 
+    /// TODO: internal
     /// @dev calculates interest using compounded interest rate formula
     function calculateCompoundedInterest(
         uint256 _variableBorrowRate,
         uint256 _secondsInAYear,
         uint256 _timestamp,
         uint256 _lastUpdatedTimestamp
-    ) internal pure returns (uint256) {
+    ) public pure returns (uint256) {
         uint256 ratePerSecond = _variableBorrowRate / _secondsInAYear;
 
         return
-            (ratePerSecond + WadRayMath.RAY).rayPow(
+            (WadRayMath.RAY + ratePerSecond).rayPow(
                 _timestamp - _lastUpdatedTimestamp
             );
     }
@@ -574,22 +567,17 @@ contract LendingPoolCore {
         );
     }
 
-    function getUserCumulatedRewards(address _pool, address _user)
-        public
-        view
-        returns (uint256)
-    {
+    function getUserCumulatedRewards(
+        address _pool,
+        address _user,
+        uint256 _totalRewards
+    ) public view returns (uint256) {
         uint256 userShare = DataProvider(address(this)).getUserRewardShare(
             _pool,
             _user
         );
-        uint256 totalRewards = LibFacet
-            .lpcStorage()
-            .pools[_pool]
-            .rewardsLiquidity;
 
-        /// @dev: divide by 10**18 because userShare is in wei and not a fractional number
-        return (totalRewards * userShare) / 10**18;
+        return (_totalRewards * userShare) / 10**18;
     }
 
     function getPoolDepositInformation(address _pool)
@@ -599,8 +587,6 @@ contract LendingPoolCore {
             string memory asset,
             uint256 depositedLiquidity,
             uint256 borrowedLiquidity,
-            uint256 overallBorrowRate,
-            uint256 currentLiquidityRate,
             bool isUsableAsCollateral
         )
     {
@@ -609,8 +595,6 @@ contract LendingPoolCore {
             pool.asset,
             pool.providedLiquidity,
             pool.borrowedLiquidity,
-            pool.rates.overallBorrowRate,
-            pool.rates.currentLiquidityRate,
             pool.isUsableAsCollateral
         );
     }
@@ -684,6 +668,36 @@ contract LendingPoolCore {
             LibFacet.lpcStorage().pools[_pool].providedLiquidity +
             LibFacet.lpcStorage().pools[_pool].rewardsLiquidity -
             LibFacet.lpcStorage().pools[_pool].borrowedLiquidity;
+    }
+
+    function calculateUserDepositAPY(address _pool)
+        public
+        view
+        returns (uint256)
+    {
+        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
+        if (pool.providedLiquidity == 0) return 0;
+
+        uint256 oneYearAhead = pool.lastUpdatedTimestamp + 365 days;
+        uint256 cumulatedInterest = LendingPoolCore(address(this))
+            .calculateCompoundedInterest(
+                pool.rates.variableBorrowRate,
+                LibFacet.SECONDS_IN_A_YEAR,
+                oneYearAhead,
+                pool.lastUpdatedTimestamp
+            )
+            .rayMul(pool.cumulatedVariableBorrowIndex);
+        uint256 compoundedInterest = pool
+            .borrowedLiquidity
+            .wadToRay()
+            .rayMul(cumulatedInterest)
+            .rayToWad();
+        uint256 cumulatedValue = compoundedInterest - pool.borrowedLiquidity;
+
+        return
+            (pool.providedLiquidity + cumulatedValue).wadDiv(
+                pool.providedLiquidity
+            ) - WadRayMath.WAD;
     }
 
     function isPoolBorrowingEnabled(address _pool) public view returns (bool) {

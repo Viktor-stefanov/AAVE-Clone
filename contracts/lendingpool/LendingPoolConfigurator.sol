@@ -39,17 +39,17 @@ contract LendingPoolConfigurator {
         if (_volatility == LibFacet.TokenVolatility.LOW) {
             pool.rates.interestRateSlopeAbove = 60 * WadRayMath.RAY;
             pool.rates.interestRateSlopeBelow = 4 * WadRayMath.RAY;
-            pool.rates.baseVariableBorrowRate = 0 * WadRayMath.RAY;
-            pool.rates.targetUtilisationRate = (90 * WadRayMath.RAY) / 100; // * 0.9
+            pool.rates.baseVariableBorrowRate = 0;
+            pool.rates.targetUtilisationRate = 90 * WadRayMath.RAY;
             pool.liquidationThreshold = 90; /// TODO: consider if this is a good default value
             pool.liquidationBonus = 10;
             pool.loanToValue = 85;
             pool.baseLTV = 85;
         } else if (_volatility == LibFacet.TokenVolatility.HIGH) {
-            pool.rates.interestRateSlopeAbove = (100 * WadRayMath.RAY); // / 100;
-            pool.rates.interestRateSlopeBelow = (8 * WadRayMath.RAY); // / 100;
+            pool.rates.interestRateSlopeAbove = (100 * WadRayMath.RAY) / 100;
+            pool.rates.interestRateSlopeBelow = (8 * WadRayMath.RAY) / 100;
             pool.rates.baseVariableBorrowRate = 0;
-            pool.rates.targetUtilisationRate = (65 * WadRayMath.RAY); // / 100;
+            pool.rates.targetUtilisationRate = (65 * WadRayMath.RAY) / 100;
             pool.liquidationThreshold = 70;
             pool.liquidationBonus = 5;
             pool.loanToValue = 65;

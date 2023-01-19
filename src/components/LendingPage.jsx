@@ -1,12 +1,14 @@
-// target: 2.442011765253355%
 import { useEffect, useState } from "react";
 import Header from "./Header";
 import {
   getAllActivePoolAssetNames,
   getPoolDepositData,
+  deposit,
 } from "../utils/contracts";
 
 export default function LendingPage() {
+  const [depositAmount, setDepositAmount] = useState(null);
+  const [yieldEstimate, setYieldEstimate] = useState(null);
   const [marketData, setMarketData] = useState(null);
   const [markets, setMarkets] = useState([]);
 
@@ -16,6 +18,15 @@ export default function LendingPage() {
     }
     getMarkets();
   }, []);
+
+  function onDepositAmountInput(amount, apy) {
+    setDepositAmount(amount);
+    setYieldEstimate(amount + amount * (apy / 100));
+  }
+
+  async function depositFunds() {
+    await deposit(marketData.asset, depositAmount);
+  }
 
   return (
     <>
@@ -60,13 +71,29 @@ export default function LendingPage() {
             Total borrowed liquidity: {marketData.borrowedLiquidity}{" "}
             {marketData.asset}
           </p>
-          <p>Current overall borrow rate: {marketData.overallBorrowRate}</p>
-          <p>Current liquidity rate: {marketData.currentLiquidityRate}</p>
           <p>
             Expected APY (this number will vary with the amount of
             borrowed/deposited assets):{" "}
-            {marketData.depositAPY === 0 ? "N/A" : marketData.depositAPY}
+            {marketData.depositAPY === 0 ? "N/A" : `${marketData.depositAPY}%`}
           </p>
+          <span>
+            Enter the amount of {marketData.asset} that you wish to deposit:{" "}
+          </span>
+          <input
+            type="number"
+            onInput={(e) =>
+              onDepositAmountInput(
+                parseFloat(e.target.value),
+                marketData.depositAPY
+              )
+            }
+          />
+          {depositAmount && (
+            <>
+              <p>Estimated yield after 1 year: {yieldEstimate}</p>
+              <button onClick={depositFunds}>Deposit</button>
+            </>
+          )}
         </div>
       )}
     </>

@@ -215,8 +215,6 @@ contract DataProvider {
             string memory asset,
             uint256 depositedLiquidity,
             uint256 borrowedLiquidity,
-            uint256 overallBorrowRate,
-            uint256 currentLiquidityRate,
             uint256 depositAPY,
             bool isUsableAsCollateral
         )
@@ -225,15 +223,11 @@ contract DataProvider {
             asset,
             depositedLiquidity,
             borrowedLiquidity,
-            overallBorrowRate,
-            currentLiquidityRate,
             isUsableAsCollateral
         ) = LendingPoolCore(address(this)).getPoolDepositInformation(_pool);
-        depositAPY =
-            ((currentLiquidityRate / LibFacet.SECONDS_IN_A_YEAR) +
-                WadRayMath.RAY).rayPow(LibFacet.SECONDS_IN_A_YEAR) -
-            WadRayMath.RAY;
-        console.log(depositAPY);
+        depositAPY = LendingPoolCore(address(this)).calculateUserDepositAPY(
+            _pool
+        );
     }
 
     function calculateHealthFactorFromBalances(

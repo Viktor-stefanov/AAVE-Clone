@@ -33,7 +33,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     usdcMock = await deploy("UsdcMock", {
       from: deployer,
       log: true,
-      args: [(await ethers.getSigners())[1].address],
+      args: ["0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199"], //(await ethers.getSigners())[1].address],
     });
 
   const p = new ethers.Contract(pf.address, pf.abi, await ethers.getSigner());
@@ -92,34 +92,32 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   await d.initPool(ethMock.address, "ETH", 18, 1);
   await d.initPool(usdcMock.address, "USDC", 18, 0);
 
-  const di = new ethers.Contract(
-    diamond.address,
-    lp.abi,
-    (await ethers.getSigners())[0]
-  );
+  //const di = new ethers.Contract(
+  //  diamond.address,
+  //  lp.abi,
+  //  (await ethers.getSigners())[0]
+  //);
 
-  await di.deposit(ethMock.address, ethers.utils.parseEther("5"), {
-    value: ethers.utils.parseEther("5"),
-  });
+  //await di.deposit(ethMock.address, ethers.utils.parseEther("5"), false, {
+  //  value: ethers.utils.parseEther("5"),
+  //});
 
-  const dia = new ethers.Contract(
-    diamond.address,
-    lp.abi,
-    (await ethers.getSigners())[1]
-  );
+  //const dia = new ethers.Contract(
+  //  diamond.address,
+  //  lp.abi,
+  //  (await ethers.getSigners())[1]
+  //);
 
-  const usdc = new ethers.Contract(
-    usdcMock.address,
-    usdcMock.abi,
-    (await ethers.getSigners())[1]
-  );
-  await usdc.increaseAllowance(dia.address, ethers.utils.parseEther("6000"));
+  //const usdc = new ethers.Contract(
+  //  usdcMock.address,
+  //  usdcMock.abi,
+  //  (await ethers.getSigners())[1]
+  //);
+  //await usdc.increaseAllowance(dia.address, ethers.utils.parseEther("6000"));
 
-  await dia.deposit(usdcMock.address, ethers.utils.parseEther("6000"));
+  //await dia.deposit(usdcMock.address, ethers.utils.parseEther("6000"), true);
 
-  await dia.borrow(ethMock.address, ethers.utils.parseEther("2"), 0);
-
-  //await di.test(ethMock.address, deployer);
+  //await dia.borrow(ethMock.address, ethers.utils.parseEther("3"), 0);
 
   //await increase(60 * 60 * 24 * 365);
 

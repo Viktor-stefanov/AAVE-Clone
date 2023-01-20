@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import Header from "./Header";
-import { getActivePoolsDisplayData } from "../utils/contracts";
+import { getActivePoolsDisplayData, borrow } from "../utils/contracts";
 
-export default function MarketsPage() {
+export default function BorrowPage() {
+  const [borrowAmount, setBorrowAmount] = useState(null);
+  const [rateMode, setRateMode] = useState(null);
   const [markets, setMarkets] = useState([]);
 
   useEffect(() => {
@@ -11,6 +13,10 @@ export default function MarketsPage() {
     }
     test();
   }, []);
+
+  async function borrowAssets(asset) {
+    await borrow(asset, borrowAmount, parseInt(rateMode));
+  }
 
   return (
     <>
@@ -46,6 +52,29 @@ export default function MarketsPage() {
             This pool is {market.isUsableAsCollateral ? "" : "not"} usable as
             collateral
           </p>
+          <span>
+            Enter the amount of {market.asset} that you wish to borrow:{" "}
+          </span>
+          <input
+            type="number"
+            onInput={(e) => setBorrowAmount(parseFloat(e.target.value))}
+          />
+          <br />
+          <span>Select your desired interest rate mode: </span>
+          <select
+            defaultValue="init"
+            onInput={(e) => setRateMode(e.target.value)}
+          >
+            <option value="init" disabled></option>
+            <option value="0">variable</option>
+            <option value="1">stable</option>
+          </select>
+          <br />
+          {borrowAmount && rateMode && (
+            <>
+              <button onClick={() => borrowAssets(market.asset)}>Borrow</button>
+            </>
+          )}
         </div>
       ))}
     </>

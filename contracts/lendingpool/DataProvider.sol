@@ -39,6 +39,7 @@ contract DataProvider {
         GetUserGlobalDataVars memory vars;
         LendingPoolCore core = LendingPoolCore(address(this));
         address[] memory pools = LibFacet.lpcStorage().allPools;
+
         for (uint256 poolIdx = 0; poolIdx < pools.length; poolIdx++) {
             (
                 vars.compoundedLiquidityBalance,

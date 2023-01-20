@@ -15,8 +15,13 @@ export default function Header() {
       <button onClick={onLogout}>Log Out</button>
       <br />
 
-      <button onClick={() => navigate("/markets", { replace: true })}>Markets</button>
+      <button onClick={() => navigate("/borrow", { replace: true })}>
+        Borrow
+      </button>
       <button onClick={() => navigate("/lend", { replace: true })}>Lend</button>
+      <button onClick={() => navigate("/profile", { replace: true })}>
+        Profile
+      </button>
     </>
   );
 }

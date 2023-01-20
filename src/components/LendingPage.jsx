@@ -7,6 +7,7 @@ import {
 } from "../utils/contracts";
 
 export default function LendingPage() {
+  const [useAsCollateral, setUseAsCollateral] = useState(false);
   const [depositAmount, setDepositAmount] = useState(null);
   const [yieldEstimate, setYieldEstimate] = useState(null);
   const [marketData, setMarketData] = useState(null);
@@ -25,7 +26,7 @@ export default function LendingPage() {
   }
 
   async function depositFunds() {
-    await deposit(marketData.asset, depositAmount);
+    await deposit(marketData.asset, depositAmount, useAsCollateral);
   }
 
   return (
@@ -87,6 +88,12 @@ export default function LendingPage() {
                 marketData.depositAPY
               )
             }
+          />
+          <br />
+          <span>Use asset as collateral? </span>
+          <input
+            onChange={(e) => setUseAsCollateral(e.target.checked)}
+            type="checkbox"
           />
           {depositAmount && (
             <>

@@ -8,7 +8,11 @@ import "hardhat/console.sol";
 contract LendingPool {
     using WadRayMath for uint256;
 
-    function deposit(address _pool, uint256 _amount) external payable {
+    function deposit(
+        address _pool,
+        uint256 _amount,
+        bool _useAsCollateral
+    ) external payable {
         require(
             _pool == LibFacet.facetStorage().ethAddress
                 ? msg.sender.balance >= _amount
@@ -18,7 +22,7 @@ contract LendingPool {
 
         LendingPoolCore core = LendingPoolCore(address(this));
 
-        core.updateStateOnDeposit(_pool, msg.sender, _amount);
+        core.updateStateOnDeposit(_pool, msg.sender, _amount, _useAsCollateral);
 
         core.transferToPool(_pool, msg.sender, _amount);
     }
@@ -233,8 +237,6 @@ contract LendingPool {
         );
     }
 
-    // Q: why do we take the origination fee from the compounded balance and not the principal amount?
-    // A: because that is an implementation detail and the original AAVE protocol leaves this part out to the government module
     function calculateUserAmountToRepay(address _pool, address _user)
         public
         view
@@ -248,10 +250,31 @@ contract LendingPool {
         return compoundedBorrowBalance + originationFee;
     }
 
-    function liquidationCall(address _pool, address _userToLiquidate)
-        external
-        payable
-    {}
+    function liquidationCall(
+        address _pool,
+        address _collateral,
+        address _userToLiquidate
+    ) external payable {
+        (, , , , , , , bool healthFactorBelowThreshold) = DataProvider(
+            address(this)
+        ).getUserGlobalData(_userToLiquidate);
+        require(healthFactorBelowThreshold, "User cannot be liquidated.");
+        require(
+            LibFacet
+                .lpcStorage()
+                .pools[_collateral]
+                .users[_userToLiquidate]
+                .useAsCollateral &&
+                LibFacet
+                    .lpcStorage()
+                    .pools[_collateral]
+                    .users[_userToLiquidate]
+                    .liquidityProvided >
+                0,
+            "User has not used the given asset as collateral."
+        );
+        /// calculate the maximum amount that can be liquidated
+    }
 
     function getUserMaxRedeemAmount(address _pool, address _user)
         public

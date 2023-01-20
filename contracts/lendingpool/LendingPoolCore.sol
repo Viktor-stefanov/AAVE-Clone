@@ -24,7 +24,8 @@ contract LendingPoolCore {
     function updateStateOnDeposit(
         address _pool,
         address _user,
-        uint256 _amount
+        uint256 _amount,
+        bool _useAsCollateral
     ) public {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
         updateCumulativeIndexes(pool);
@@ -32,9 +33,9 @@ contract LendingPoolCore {
         bool isFirstDeposit = pool.users[_user].liquidityProvided == 0;
         pool.providedLiquidity += _amount;
         pool.users[_user].liquidityProvided += _amount;
+        setUserUsePoolAsCollateralInternal(_pool, _user, _useAsCollateral);
         if (isFirstDeposit) {
             pool.allUsers.push(_user);
-            setUserUsePoolAsCollateralInternal(_pool, _user, true);
             initializeUserData(pool.users[_user]);
         }
     }
@@ -333,7 +334,7 @@ contract LendingPoolCore {
         uint256 _optimalUtilizationRate
     )
         internal
-        pure
+        view
         returns (
             uint256 currentVariableBorrowRate,
             uint256 currentLiquidityRate
@@ -342,8 +343,12 @@ contract LendingPoolCore {
         uint256 totalBorrows = _totalVariableBorrows; /// @dev + totalStableBorrows
         uint256 utilizationRate = (_totalLiquidity == 0 && totalBorrows == 0)
             ? 0
-            : totalBorrows.rayDiv(_totalLiquidity);
+            : totalBorrows.rayDiv(_totalLiquidity + totalBorrows);
 
+        console.log(totalBorrows);
+        console.log(_totalLiquidity);
+        console.log(utilizationRate);
+        console.log(_optimalUtilizationRate);
         if (utilizationRate > _optimalUtilizationRate) {
             uint256 excessUtilizationRateRatio = (utilizationRate -
                 _optimalUtilizationRate).rayDiv(
@@ -679,6 +684,9 @@ contract LendingPoolCore {
         if (pool.providedLiquidity == 0) return 0;
 
         uint256 oneYearAhead = pool.lastUpdatedTimestamp + 365 days;
+        console.log(pool.providedLiquidity);
+        console.log(pool.borrowedLiquidity);
+        console.log(pool.rates.variableBorrowRate);
         uint256 cumulatedInterest = LendingPoolCore(address(this))
             .calculateCompoundedInterest(
                 pool.rates.variableBorrowRate,

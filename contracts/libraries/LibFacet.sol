@@ -25,7 +25,6 @@ library LibFacet {
         uint256 collateralETHBalance;
         uint256 liquidationThreshold;
         uint256 originationFee;
-        uint256 healthFactor;
         uint256 lastUpdatedTimestamp;
         bool useAsCollateral;
         UserInterestRate rates;

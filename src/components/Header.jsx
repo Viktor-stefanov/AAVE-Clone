@@ -3,9 +3,8 @@ import { useNavigate } from "react-router-dom";
 import AuthContext from "./AuthContext";
 
 export default function Header() {
-  const { getWalletData, onLogout } = useContext(AuthContext);
+  const { walletData, onLogout } = useContext(AuthContext);
   const navigate = useNavigate();
-  const walletData = getWalletData();
 
   return (
     <>

@@ -7,8 +7,8 @@ import diamondJson from "../../deployments/localhost/Diamond.json";
 
 const { dpDiamond, lpDiamond, ethMock, usdcMock } =
   await instantiateContracts();
-const assetToAddress = await createAssetToAddress();
-const assetToMock = { ETH: ethMock, USDC: usdcMock };
+//const assetToAddress = await createAssetToAddress();
+//const assetToMock = { ETH: ethMock, USDC: usdcMock };
 
 async function instantiateContracts() {
   const provider = new ethers.providers.Web3Provider(window.ethereum),

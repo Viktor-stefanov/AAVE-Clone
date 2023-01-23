@@ -4,11 +4,11 @@ import AuthContext from "./AuthContext";
 
 export default function LoginPage() {
   const [loggingIn, setLoggingIn] = useState(null);
-  const { getWalletData, onLogin } = useContext(AuthContext);
+  const { walletData, onLogin } = useContext(AuthContext);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (getWalletData().walletConnected) navigate("/");
+    if (walletData.walletConnected) navigate("/");
   }, []);
 
   async function handleLogin() {

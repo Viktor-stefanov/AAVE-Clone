@@ -10,7 +10,10 @@ export default {
   connectWallet: async function connectWallet() {
     if (window.ethereum) {
       try {
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const provider = new ethers.providers.Web3Provider(
+          window.ethereum,
+          "any"
+        );
         const { chainId, name } = await provider.getNetwork();
         this.walletConnected = true;
         this.accounts = await provider.send("eth_requestAccounts", []);
@@ -19,6 +22,27 @@ export default {
         this.balance = ethers.utils.formatEther(
           await provider.getBalance(this.account)
         );
+
+        window.ethereum.on("accountsChanged", async (accounts) => {
+          this.accounts = accounts;
+          this.account = accounts[0];
+          this.balance = ethers.utils.formatEther(
+            await provider.getBalance(this.account)
+          );
+
+          window.ethereum.emit("change");
+        });
+
+        window.ethereum.on("chainChanged", async () => {
+          const { chainId, name } = await provider.getNetwork();
+          this.network = { chainId, name };
+          this.balance = ethers.utils.formatEther(
+            await provider.getBalance(this.account)
+          );
+
+          window.ethereum.emit("change");
+        });
+
         return true;
       } catch (err) {
         console.log(err);

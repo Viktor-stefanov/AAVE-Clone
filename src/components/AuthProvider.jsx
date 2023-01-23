@@ -11,17 +11,22 @@ export default function AuthProvider({ children }) {
     const wd = localStorage.getItem("walletData");
     setWalletData(JSON.parse(wd));
     localStorage.setItem("walletData", wd ? wd : "{}");
+    if (JSON.parse(wd).chainId === 31337)
+      document.dispatchEvent(new Event("onCorrectNetwork"));
   }, []);
 
   async function storeWalletData() {
+    console.log("on change fired");
     const newWalletData = Wallet.getData();
     localStorage.setItem("walletData", JSON.stringify(newWalletData));
     setWalletData(newWalletData);
+    if (newWalletData.chainId === 31337)
+      document.dispatchEvent(new Event("onCorrectNetwork"));
   }
 
   async function onLogin() {
     if (await Wallet.connectWallet()) {
-      window.ethereum.on("change", () => storeWalletData()); //storeWalletData);
+      window.ethereum.on("change", () => storeWalletData());
       storeWalletData();
       navigate("/");
     }

@@ -21,6 +21,10 @@ contract LendingPoolConfigurator {
         LibFacet.facetStorage().lpcAddress = _lpcAddress;
     }
 
+    function setDiamondAddress(address _diamond) external {
+        LibFacet.facetStorage().diamondAddress = _diamond;
+    }
+
     function initPool(
         address _pool,
         string memory _asset,

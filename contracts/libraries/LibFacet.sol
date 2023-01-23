@@ -19,9 +19,9 @@ library LibFacet {
     struct UserPoolData {
         uint256 liquidityProvided;
         uint256 principalBorrowBalance;
+        uint256 compoundedBorrowBalance;
         uint256 cumulatedVariableBorrowIndex;
         uint256 lastCumulatedVariableBorrowIndex;
-        uint256 compoundedBorrowBalance;
         uint256 collateralETHBalance;
         uint256 liquidationThreshold;
         uint256 originationFee;
@@ -65,6 +65,7 @@ library LibFacet {
         address dataProviderAddress;
         address priceFeedAddress;
         address feeProviderAddress;
+        address diamondAddress;
     }
 
     struct InterestRate {
@@ -83,6 +84,20 @@ library LibFacet {
         uint256 variableBorrowRate;
         uint256 stableBorrowRate;
         uint256 cumulatedVariableBorrowIndex;
+    }
+
+    struct getPoolDisplayDataLocalVars {
+        string asset;
+        uint256 loanToValue;
+        uint256 liquidationThreshold;
+        uint256 liquidationBonus;
+        uint256 depositedLiquidity;
+        uint256 borrowedLiquidity;
+        uint256 userBorrowedLiquidity;
+        uint256 userRepayAmount;
+        bool isBorrowingEnabled;
+        bool isUsableAsCollateral;
+        bool isActive;
     }
 
     enum TokenVolatility {

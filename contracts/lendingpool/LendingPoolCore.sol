@@ -5,6 +5,7 @@ import "./DataProvider.sol";
 import "../libraries/LibFacet.sol";
 import "../libraries/WadRayMath.sol";
 import "../mocks/EthMock.sol";
+import "../mocks/UsdcMock.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "hardhat/console.sol";
 
@@ -334,7 +335,7 @@ contract LendingPoolCore {
         uint256 _optimalUtilizationRate
     )
         internal
-        view
+        pure
         returns (
             uint256 currentVariableBorrowRate,
             uint256 currentLiquidityRate
@@ -345,10 +346,6 @@ contract LendingPoolCore {
             ? 0
             : totalBorrows.rayDiv(_totalLiquidity + totalBorrows);
 
-        console.log(totalBorrows);
-        console.log(_totalLiquidity);
-        console.log(utilizationRate);
-        console.log(_optimalUtilizationRate);
         if (utilizationRate > _optimalUtilizationRate) {
             uint256 excessUtilizationRateRatio = (utilizationRate -
                 _optimalUtilizationRate).rayDiv(
@@ -585,13 +582,15 @@ contract LendingPoolCore {
         return (_totalRewards * userShare) / 10**18;
     }
 
-    function getPoolDepositInformation(address _pool)
+    function getPoolDepositInformation(address _pool, address _user)
         public
         view
         returns (
             string memory asset,
             uint256 depositedLiquidity,
+            uint256 userDepositedLiquidity,
             uint256 borrowedLiquidity,
+            uint256 loanToValue,
             bool isUsableAsCollateral
         )
     {
@@ -599,38 +598,36 @@ contract LendingPoolCore {
         return (
             pool.asset,
             pool.providedLiquidity,
+            pool.users[_user].liquidityProvided,
             pool.borrowedLiquidity,
+            pool.loanToValue,
             pool.isUsableAsCollateral
         );
     }
 
-    function getPoolDisplayInformation(address _pool)
+    function getPoolDisplayInformation(address _pool, address _user)
         public
         view
-        returns (
-            string memory,
-            uint256,
-            uint256,
-            uint256,
-            uint256,
-            uint256,
-            bool,
-            bool,
-            bool
-        )
+        returns (LibFacet.getPoolDisplayDataLocalVars memory)
     {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
-        return (
-            pool.asset,
-            pool.loanToValue,
-            pool.liquidationThreshold,
-            pool.liquidationBonus,
-            pool.providedLiquidity,
-            pool.borrowedLiquidity,
-            pool.isBorrowingEnabled,
-            pool.isUsableAsCollateral,
-            pool.isActive
-        );
+        return
+            LibFacet.getPoolDisplayDataLocalVars(
+                pool.asset,
+                pool.loanToValue,
+                pool.liquidationThreshold,
+                pool.liquidationBonus,
+                pool.providedLiquidity,
+                pool.borrowedLiquidity,
+                pool.users[_user].principalBorrowBalance,
+                DataProvider(address(this)).calculateUserAmountToRepay(
+                    _pool,
+                    _user
+                ),
+                pool.isBorrowingEnabled,
+                pool.isUsableAsCollateral,
+                pool.isActive
+            );
     }
 
     function getPoolConfiguration(address _pool)
@@ -654,6 +651,20 @@ contract LendingPoolCore {
 
     function getPoolDecimals(address _pool) public view returns (uint256) {
         return LibFacet.lpcStorage().pools[_pool].decimals;
+    }
+
+    function getUserMaxRedeemAmount(address _pool, address _user)
+        public
+        view
+        returns (uint256)
+    {
+        return
+            getUserCumulatedRewards(
+                _pool,
+                _user,
+                LibFacet.lpcStorage().pools[_pool].rewardsLiquidity
+            ) +
+            LibFacet.lpcStorage().pools[_pool].users[_user].liquidityProvided;
     }
 
     function getPoolCumulatedRewards(address _pool)
@@ -684,9 +695,6 @@ contract LendingPoolCore {
         if (pool.providedLiquidity == 0) return 0;
 
         uint256 oneYearAhead = pool.lastUpdatedTimestamp + 365 days;
-        console.log(pool.providedLiquidity);
-        console.log(pool.borrowedLiquidity);
-        console.log(pool.rates.variableBorrowRate);
         uint256 cumulatedInterest = LendingPoolCore(address(this))
             .calculateCompoundedInterest(
                 pool.rates.variableBorrowRate,
@@ -746,7 +754,8 @@ contract LendingPoolCore {
             (bool success, ) = _pool.call{value: _amount}("");
             require(success, "Error while sending ETH.");
         } else {
-            ERC20(_pool).transferFrom(_user, _pool, _amount);
+            bool success = ERC20(_pool).transferFrom(_user, _pool, _amount);
+            require(success, "Error while sending ERC20 tokens to pool.");
         }
     }
 
@@ -758,6 +767,11 @@ contract LendingPoolCore {
         if (_pool == LibFacet.facetStorage().ethAddress) {
             EthMock(payable(_pool)).transferEthToUser(_user, _amount);
         } else {
+            UsdcMock(_pool).customApprove(
+                _pool,
+                LibFacet.facetStorage().diamondAddress,
+                _amount
+            );
             ERC20(_pool).transferFrom(_pool, _user, _amount);
         }
     }

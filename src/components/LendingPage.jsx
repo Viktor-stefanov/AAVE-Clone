@@ -4,11 +4,13 @@ import {
   getAllActivePoolAssetNames,
   getPoolDepositData,
   deposit,
+  redeem,
 } from "../utils/contracts";
 
 export default function LendingPage() {
   const [useAsCollateral, setUseAsCollateral] = useState(false);
   const [depositAmount, setDepositAmount] = useState(null);
+  const [redeemAmount, setRedeemAmount] = useState(null);
   const [yieldEstimate, setYieldEstimate] = useState(null);
   const [marketData, setMarketData] = useState(null);
   const [markets, setMarkets] = useState([]);
@@ -21,12 +23,19 @@ export default function LendingPage() {
   }, []);
 
   function onDepositAmountInput(amount, apy) {
-    setDepositAmount(amount);
-    setYieldEstimate(amount + amount * (apy / 100));
+    if (isNaN(amount)) setDepositAmount(null);
+    else {
+      setDepositAmount(amount);
+      setYieldEstimate(amount + amount * (apy / 100));
+    }
   }
 
   async function depositFunds() {
     await deposit(marketData.asset, depositAmount, useAsCollateral);
+  }
+
+  async function redeemDeposit() {
+    await redeem(marketData.asset, redeemAmount);
   }
 
   return (
@@ -69,9 +78,34 @@ export default function LendingPage() {
             {marketData.asset}
           </p>
           <p>
+            You have deposited {marketData.userDepositedLiquidity}{" "}
+            {marketData.asset} in this pool
+          </p>
+          {marketData.userDepositedLiquidity > 0 && (
+            <>
+              <span>Enter the amount you wish to redeem: </span>
+              <input
+                type="number"
+                onInput={(e) =>
+                  e.target.value === ""
+                    ? setRedeemAmount(null)
+                    : setRedeemAmount(parseFloat(e.target.value))
+                }
+              />
+              <br />
+              <span>
+                Maximal amount to redeem: {marketData.userMaxRedeemAmount}{" "}
+                {marketData.asset}
+              </span>
+              <br />
+              {redeemAmount && <button onClick={redeemDeposit}>Redeem</button>}
+            </>
+          )}
+          <p>
             Total borrowed liquidity: {marketData.borrowedLiquidity}{" "}
             {marketData.asset}
           </p>
+          <p>Loan To Value (LTV): {marketData.loanToValue}%</p>
           <p>
             Expected APY (this number will vary with the amount of
             borrowed/deposited assets):{" "}
@@ -97,7 +131,11 @@ export default function LendingPage() {
           />
           {depositAmount && (
             <>
-              <p>Estimated yield after 1 year: {yieldEstimate}</p>
+              {useAsCollateral ? (
+                <br />
+              ) : (
+                <p>Estimated yield after 1 year: {yieldEstimate}</p>
+              )}
               <button onClick={depositFunds}>Deposit</button>
             </>
           )}

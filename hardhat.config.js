@@ -7,6 +7,12 @@ module.exports = {
       url: "http://127.0.0.1:8545/",
       name: "viktorNetwork",
     },
+    hardhat: {
+      mining: {
+        auto: true,
+        interval: 5000,
+      },
+    },
   },
   namedAccounts: {
     deployer: {

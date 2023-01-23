@@ -1,9 +1,11 @@
+import { ethers } from "ethers";
 import { useEffect, useState } from "react";
 import Header from "./Header";
-import { getActivePoolsDisplayData, borrow } from "../utils/contracts";
+import { getActivePoolsDisplayData, borrow, repay } from "../utils/contracts";
 
 export default function BorrowPage() {
   const [borrowAmount, setBorrowAmount] = useState(null);
+  const [repayAmount, setRepayAmount] = useState(null);
   const [rateMode, setRateMode] = useState(null);
   const [markets, setMarkets] = useState([]);
 
@@ -16,6 +18,10 @@ export default function BorrowPage() {
 
   async function borrowAssets(asset) {
     await borrow(asset, borrowAmount, parseInt(rateMode));
+  }
+
+  async function repayLoan(asset) {
+    await repay(asset, repayAmount);
   }
 
   return (
@@ -40,6 +46,29 @@ export default function BorrowPage() {
           <p>
             Total borrowed assets: {market.borrowedLiquidity} {market.asset}
           </p>
+          <p>
+            You have borrowed {market.userBorrowedLiquidity} {market.asset}
+          </p>
+          {market.userBorrowedLiquidity > 0 && (
+            <>
+              <span>Enter the amount you wish to repay:</span>
+              <input
+                type="number"
+                onInput={(e) =>
+                  e.target.value === ""
+                    ? setRepayAmount(null)
+                    : setRepayAmount(ethers.utils.parseEther(e.target.value))
+                }
+              />
+              <br />
+              <span>
+                Total repay amount: {market.userRepayAmount} {market.asset}
+              </span>
+              {repayAmount && (
+                <button onClick={() => repayLoan(market.asset)}>Repay</button>
+              )}
+            </>
+          )}
           <p>LTV (Loan To Value): {market.loanToValue}%</p>
           <p>Liquidation Threshold: {market.liquidationThreshold}%</p>
           <p>Liquidation Bonus: {market.liquidationBonus}%</p>

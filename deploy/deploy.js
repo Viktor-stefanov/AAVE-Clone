@@ -75,7 +75,11 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
         [
           lpconf.address,
           0,
-          [iLpconf.getSighash("initPool"), iLpconf.getSighash("init")],
+          [
+            iLpconf.getSighash("initPool"),
+            iLpconf.getSighash("init"),
+            iLpconf.getSighash("setDiamondAddress"),
+          ],
         ],
         [lp.address, 0, lpSelectors],
       ],
@@ -89,6 +93,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     await ethers.getSigner()
   );
 
+  await d.setDiamondAddress(diamond.address);
   await d.initPool(ethMock.address, "ETH", 18, 1);
   await d.initPool(usdcMock.address, "USDC", 18, 0);
 

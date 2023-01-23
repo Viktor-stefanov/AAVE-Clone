@@ -14,13 +14,23 @@ export default function Header() {
       <button onClick={onLogout}>Log Out</button>
       <br />
 
-      <button onClick={() => navigate("/borrow", { replace: true })}>
-        Borrow
-      </button>
-      <button onClick={() => navigate("/lend", { replace: true })}>Lend</button>
-      <button onClick={() => navigate("/profile", { replace: true })}>
-        Profile
-      </button>
+      {walletData.chainId === 31337 ? (
+        <>
+          <button onClick={() => navigate("/borrow", { replace: true })}>
+            Borrow
+          </button>
+          <button onClick={() => navigate("/lend", { replace: true })}>
+            Lend
+          </button>
+          <button onClick={() => navigate("/profile", { replace: true })}>
+            Profile
+          </button>
+        </>
+      ) : (
+        <>
+          <h2>Please change your network to hardhat local :)</h2>
+        </>
+      )}
     </>
   );
 }

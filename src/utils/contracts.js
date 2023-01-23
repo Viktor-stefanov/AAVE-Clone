@@ -7,12 +7,17 @@ import diamondJson from "../../deployments/localhost/Diamond.json";
 
 const { dpDiamond, lpDiamond, ethMock, usdcMock } =
   await instantiateContracts();
-//const assetToAddress = await createAssetToAddress();
-//const assetToMock = { ETH: ethMock, USDC: usdcMock };
+const assetToMock = { ETH: ethMock, USDC: usdcMock };
+let assetToAddress = {};
+
+document.addEventListener(
+  "onCorrectNetwork",
+  async () => (assetToAddress = await createAssetToAddress())
+);
 
 async function instantiateContracts() {
-  const provider = new ethers.providers.Web3Provider(window.ethereum),
-    signer = provider.getSigner(),
+  const web3Provider = new ethers.providers.Web3Provider(window.ethereum),
+    signer = web3Provider.getSigner(),
     ethMock = new ethers.Contract(ethMockJson.address, ethMockJson.abi, signer),
     usdcMock = new ethers.Contract(
       usdcMockJson.address,
@@ -47,7 +52,10 @@ async function getActivePoolsDisplayData() {
   const poolsDisplayData = [];
   const activePools = await getAllActivePools();
   for (const pool of activePools) {
-    const res = await dpDiamond.getPoolDisplayData(pool);
+    const res = await dpDiamond.getPoolDisplayData(
+      pool,
+      await dpDiamond.signer.getAddress()
+    );
     poolsDisplayData.push(assignDisplayDataProperties({}, res));
   }
 
@@ -65,6 +73,10 @@ function assignDisplayDataProperties(displayData, res) {
   displayData.borrowedLiquidity = ethers.utils.formatEther(
     res.borrowedLiquidity
   );
+  displayData.userBorrowedLiquidity = ethers.utils.formatEther(
+    res.userBorrowedLiquidity
+  );
+  displayData.userRepayAmount = ethers.utils.formatEther(res.userRepayAmount);
   displayData.isBorrowingEnabled = res.isBorrowingEnabled;
   displayData.isUsableAsCollateral = res.isUsableAsCollateral;
   displayData.isActive = res.isActive;
@@ -72,21 +84,25 @@ function assignDisplayDataProperties(displayData, res) {
   return displayData;
 }
 
-async function getPoolDisplayData(pool) {
-  return await dpDiamond.getPoolDisplayData(pool);
-}
-
 async function getPoolDepositData(asset) {
-  const res = await dpDiamond.getPoolDepositData(assetToAddress[asset]);
+  const res = await dpDiamond.getPoolLendData(
+    assetToAddress[asset],
+    await dpDiamond.signer.getAddress()
+  );
   const poolDepositData = {
     asset: res.asset,
     depositAPY: parseFloat(
       ethers.utils.formatEther(res.depositAPY) * 100
     ).toPrecision(5),
     depositedLiquidity: ethers.utils.formatEther(res.depositedLiquidity),
+    userDepositedLiquidity: ethers.utils.formatEther(
+      res.userDepositedLiquidity
+    ),
+    userMaxRedeemAmount: ethers.utils.formatEther(res.userMaxRedeemAmount),
     borrowedLiquidity: ethers.utils.formatEther(res.borrowedLiquidity),
     overallBorrowRate: parseInt(res.overallBorrowRate),
     currentLiquidityRate: parseInt(res.currentLiquidityRate),
+    loanToValue: parseInt(res.loanToValue),
     isUsableAsCollateral: res.isUsableAsCollateral,
   };
 
@@ -111,18 +127,15 @@ async function borrow(asset, amount, rateMode) {
   );
 }
 
-async function repay(asset, amount) {
-  const amountInWei = ethers.utils.parseEther(amount.toString());
+async function repay(asset, amountInWei) {
   await lpDiamond.repay(assetToAddress[asset], amountInWei, {
     value: asset === "ETH" ? amountInWei : 0,
   });
 }
 
 async function redeem(asset, amount) {
-  await lpDiamond.redeem(
-    assetToAddress[asset],
-    ethers.utils.parseEther(amount)
-  );
+  const amountInWei = ethers.utils.parseEther(amount.toString());
+  await (await lpDiamond.redeem(assetToAddress[asset], amountInWei)).wait();
 }
 
 async function getUserGlobalData() {

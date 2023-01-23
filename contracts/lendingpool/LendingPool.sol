@@ -27,11 +27,7 @@ contract LendingPool {
         core.transferToPool(_pool, msg.sender, _amount);
     }
 
-    function redeem(
-        address _pool,
-        address _user,
-        uint256 _amount
-    ) external {
+    function redeem(address _pool, uint256 _amount) external {
         LendingPoolCore core = LendingPoolCore(address(this));
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
         require(
@@ -39,16 +35,16 @@ contract LendingPool {
             "There is not enough liquidity available to redeem."
         );
         require(
-            _amount <= getUserMaxRedeemAmount(_pool, _user),
+            _amount <= core.getUserMaxRedeemAmount(_pool, msg.sender),
             "User cannot redeem more than the accumulated interest."
         );
         core.updateStateOnRedeem(
             _pool,
-            _user,
+            msg.sender,
             _amount,
-            _amount == pool.users[_user].liquidityProvided
+            _amount == core.getUserMaxRedeemAmount(_pool, msg.sender)
         );
-        core.transferToUser(_pool, _user, _amount);
+        core.transferToUser(_pool, msg.sender, _amount);
     }
 
     struct BorrowLocalVars {
@@ -237,19 +233,6 @@ contract LendingPool {
         );
     }
 
-    function calculateUserAmountToRepay(address _pool, address _user)
-        public
-        view
-        returns (uint256)
-    {
-        (, uint256 compoundedBorrowBalance, ) = LendingPoolCore(address(this))
-            .getUserBorrowBalances(_pool, _user);
-        uint256 originationFee = FeeProvider(address(this))
-            .calculateLoanOriginationFee(compoundedBorrowBalance);
-
-        return compoundedBorrowBalance + originationFee;
-    }
-
     function liquidationCall(
         address _pool,
         address _collateral,
@@ -274,19 +257,5 @@ contract LendingPool {
             "User has not used the given asset as collateral."
         );
         /// calculate the maximum amount that can be liquidated
-    }
-
-    function getUserMaxRedeemAmount(address _pool, address _user)
-        public
-        view
-        returns (uint256)
-    {
-        return
-            LendingPoolCore(address(this)).getUserCumulatedRewards(
-                _pool,
-                _user,
-                LibFacet.lpcStorage().pools[_pool].rewardsLiquidity
-            ) +
-            LibFacet.lpcStorage().pools[_pool].users[_user].liquidityProvided;
     }
 }

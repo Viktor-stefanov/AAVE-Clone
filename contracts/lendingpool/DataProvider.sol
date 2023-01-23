@@ -191,44 +191,61 @@ contract DataProvider {
         return activePools;
     }
 
-    function getPoolDisplayData(address _pool)
+    function getPoolDisplayData(address _pool, address _user)
         external
         view
-        returns (
-            string memory asset,
-            uint256 loanToValue,
-            uint256 liquidationThreshold,
-            uint256 liquidationBonus,
-            uint256 depositedLiquidity,
-            uint256 borrowedLiquidity,
-            bool isBorrowingEnabled,
-            bool isUsableAsCollateral,
-            bool isActive
-        )
+        returns (LibFacet.getPoolDisplayDataLocalVars memory)
     {
-        return LendingPoolCore(address(this)).getPoolDisplayInformation(_pool);
+        return
+            LendingPoolCore(address(this)).getPoolDisplayInformation(
+                _pool,
+                _user
+            );
     }
 
-    function getPoolDepositData(address _pool)
+    function calculateUserAmountToRepay(address _pool, address _user)
+        public
+        view
+        returns (uint256)
+    {
+        (, uint256 compoundedBorrowBalance, ) = LendingPoolCore(address(this))
+            .getUserBorrowBalances(_pool, _user);
+        uint256 originationFee = FeeProvider(address(this))
+            .calculateLoanOriginationFee(compoundedBorrowBalance);
+
+        return compoundedBorrowBalance + originationFee;
+    }
+
+    function getPoolLendData(address _pool, address _user)
         external
         view
         returns (
             string memory asset,
             uint256 depositedLiquidity,
+            uint256 userDepositedLiquidity,
+            uint256 userMaxRedeemAmount,
             uint256 borrowedLiquidity,
             uint256 depositAPY,
+            uint256 loanToValue,
             bool isUsableAsCollateral
         )
     {
         (
             asset,
             depositedLiquidity,
+            userDepositedLiquidity,
             borrowedLiquidity,
+            loanToValue,
             isUsableAsCollateral
-        ) = LendingPoolCore(address(this)).getPoolDepositInformation(_pool);
+        ) = LendingPoolCore(address(this)).getPoolDepositInformation(
+            _pool,
+            _user
+        );
         depositAPY = LendingPoolCore(address(this)).calculateUserDepositAPY(
             _pool
         );
+        userMaxRedeemAmount = LendingPoolCore(address(this))
+            .getUserMaxRedeemAmount(_pool, _user);
     }
 
     function calculateHealthFactorFromBalances(

@@ -4,7 +4,7 @@ export default {
   accounts: [],
   account: null,
   balance: null,
-  network: {},
+  chainId: null,
   walletConnected: false,
 
   connectWallet: async function connectWallet() {
@@ -18,12 +18,13 @@ export default {
         this.walletConnected = true;
         this.accounts = await provider.send("eth_requestAccounts", []);
         this.account = this.accounts[0];
-        this.network = { name, chainId };
+        this.chainId = chainId;
         this.balance = ethers.utils.formatEther(
           await provider.getBalance(this.account)
         );
 
         window.ethereum.on("accountsChanged", async (accounts) => {
+          console.log("ACCOUNTS ARE BEING CHANGED");
           this.accounts = accounts;
           this.account = accounts[0];
           this.balance = ethers.utils.formatEther(
@@ -33,12 +34,11 @@ export default {
           window.ethereum.emit("change");
         });
 
-        window.ethereum.on("chainChanged", async () => {
-          const { chainId, name } = await provider.getNetwork();
-          this.network = { chainId, name };
+        window.ethereum.on("chainChanged", async (chainId) => {
           this.balance = ethers.utils.formatEther(
             await provider.getBalance(this.account)
           );
+          this.chainId = parseInt(chainId, 16);
 
           window.ethereum.emit("change");
         });
@@ -53,8 +53,7 @@ export default {
 
   getData: function getData() {
     return {
-      networkName: this.network.name,
-      chainId: this.network.chainId,
+      chainId: this.chainId,
       account: this.account,
       accounts: this.accounts,
       balance: this.balance,

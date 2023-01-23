@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import AuthProvider from "./components/AuthProvider";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AuthProvider from "./components/AuthProvider";
 import LendingPage from "./components/LendingPage";
 import BorrowPage from "./components/BorrowPage";
 import LoginPage from "./components/LoginPage";

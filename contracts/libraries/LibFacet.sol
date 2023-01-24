@@ -97,7 +97,6 @@ library LibFacet {
         uint256 userRepayAmount;
         bool isBorrowingEnabled;
         bool isUsableAsCollateral;
-        bool isActive;
     }
 
     enum TokenVolatility {

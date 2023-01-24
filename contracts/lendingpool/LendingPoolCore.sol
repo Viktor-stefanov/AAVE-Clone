@@ -79,7 +79,7 @@ contract LendingPoolCore {
         uint256 _amount,
         uint256 _borrowFee,
         LibFacet.InterestRateMode _rateMode
-    ) public returns (uint256, uint256) {
+    ) public {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
         LibFacet.UserPoolData storage user = pool.users[_user];
         (
@@ -107,8 +107,6 @@ contract LendingPoolCore {
         );
 
         updatePoolInterestRates(pool, 0, _amount);
-
-        return (getUserCurrentBorrowRate(pool, _user), balanceIncrease);
     }
 
     function updateStateOnRepay(
@@ -334,7 +332,7 @@ contract LendingPoolCore {
         uint256 _baseVariableBorrowRate,
         uint256 _optimalUtilizationRate
     )
-        internal
+        public
         pure
         returns (
             uint256 currentVariableBorrowRate,
@@ -414,8 +412,6 @@ contract LendingPoolCore {
         return LibFacet.lpcStorage().pools[_pool].users[_user].originationFee;
     }
 
-    /// TODO: internal
-    /// @dev calculates interest using compounded interest rate formula
     function calculateCompoundedInterest(
         uint256 _variableBorrowRate,
         uint256 _secondsInAYear,
@@ -423,7 +419,6 @@ contract LendingPoolCore {
         uint256 _lastUpdatedTimestamp
     ) public pure returns (uint256) {
         uint256 ratePerSecond = _variableBorrowRate / _secondsInAYear;
-
         return
             (WadRayMath.RAY + ratePerSecond).rayPow(
                 _timestamp - _lastUpdatedTimestamp
@@ -477,10 +472,6 @@ contract LendingPoolCore {
         compoundedBalance = principalBorrowBalance
             .rayMul(cumulatedInterest)
             .rayToWad();
-
-        if (compoundedBalance == _user.principalBorrowBalance)
-            if (_user.lastUpdatedTimestamp != block.timestamp)
-                return _user.principalBorrowBalance + 1 wei;
 
         return compoundedBalance;
     }
@@ -625,8 +616,7 @@ contract LendingPoolCore {
                     _user
                 ),
                 pool.isBorrowingEnabled,
-                pool.isUsableAsCollateral,
-                pool.isActive
+                pool.isUsableAsCollateral
             );
     }
 
@@ -772,7 +762,8 @@ contract LendingPoolCore {
                 LibFacet.facetStorage().diamondAddress,
                 _amount
             );
-            ERC20(_pool).transferFrom(_pool, _user, _amount);
+            bool success = ERC20(_pool).transferFrom(_pool, _user, _amount);
+            require(success, "Error on sending ERC20 to user.");
         }
     }
 
@@ -783,16 +774,13 @@ contract LendingPoolCore {
     ) public payable {
         address feeProvider = LibFacet.facetStorage().feeProviderAddress;
         if (_token != LibFacet.facetStorage().ethAddress) {
-            require(
-                msg.value == 0,
-                "User is sending ETH along with the ERC20 transfer. Check the value attribute of the transaction"
+            bool success = ERC20(_token).transferFrom(
+                _user,
+                feeProvider,
+                _amount
             );
-            ERC20(_token).transferFrom(_user, feeProvider, _amount);
+            require(success, "Error on sending ERC20 tokens to fee collector.");
         } else {
-            require(
-                msg.value >= _amount,
-                "The amount and the value sent to deposit do not match"
-            );
             (bool result, ) = feeProvider.call{value: _amount}("");
             require(result, "Transfer of ETH failed");
         }

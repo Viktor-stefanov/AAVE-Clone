@@ -1,4 +1,20 @@
-TODO:
-  1. In the redeem UI hide the max amount to redeem and add a 'max' button on the input field. Also limit the value of the input field
-  to this max amount.
-  
+5 ETH deposit. 2.5 ETH borrow.
+optimal utilization rate = 65%
+seconds in a year = 31556926
+
+utilizationRate = 2.5 / 5 = 0.5 = 50%
+variable borrow rate = (0.5 / 0.65) * 8 = 0.769230769 * 8 = 6.15384615
+! The variable borrow rate is the borrow interest = 6.15%
+
+current liquidity rate = 3.07692307%
+? I have no idea what this rate represents
+! The documentation says that this is the deposit APY
+
+
+5 ETH deposit : 4 ETH borrow
+
+utilization rate = 4 / 5 = 0.8
+variable borrow rate = 8 + ((0.8 - 0.65) / (1 - 0.65)) * 100 = 50.8571429%
+! borrow interest rate rises sharply with over utilization
+
+current liquidity rate = 40.6857143

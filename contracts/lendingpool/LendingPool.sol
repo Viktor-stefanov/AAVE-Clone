@@ -129,14 +129,13 @@ contract LendingPool {
         );
 
         /// TODO: add stable rate checks
-        (vars.finalUserBorrowRate, vars.borrowBalanceIncrease) = core
-            .updateStateOnBorrow(
-                _pool,
-                msg.sender,
-                _amount,
-                vars.borrowFee,
-                vars.rateMode
-            );
+        core.updateStateOnBorrow(
+            _pool,
+            msg.sender,
+            _amount,
+            vars.borrowFee,
+            vars.rateMode
+        );
 
         core.transferToUser(_pool, msg.sender, _amount);
     }
@@ -170,7 +169,6 @@ contract LendingPool {
             "The user does not have any borrow pending."
         );
 
-        /// @note default behavior is to repay the full loan
         vars.paybackAmount = vars.compoundedBorrowBalance + vars.originationFee;
         if (_amount < vars.paybackAmount) vars.paybackAmount = _amount;
 

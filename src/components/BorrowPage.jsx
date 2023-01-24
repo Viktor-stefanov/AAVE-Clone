@@ -1,11 +1,16 @@
-import { ethers } from "ethers";
 import { useEffect, useState } from "react";
 import Header from "./Header";
-import { getActivePoolsDisplayData, borrow, repay } from "../utils/contracts";
+import {
+  calculateExpectedBorrowInterestRate,
+  getActivePoolsDisplayData,
+  borrow,
+  repay,
+} from "../utils/contracts";
 
 export default function BorrowPage() {
+  const [expectedBorrowRate, setExpectedBorrowRate] = useState("");
   const [borrowAmount, setBorrowAmount] = useState(null);
-  const [repayAmount, setRepayAmount] = useState(null);
+  const [repayAmount, setRepayAmount] = useState("");
   const [rateMode, setRateMode] = useState(null);
   const [markets, setMarkets] = useState([]);
 
@@ -16,12 +21,21 @@ export default function BorrowPage() {
     test();
   }, []);
 
+  async function onBorrowAmountChange(asset, amount) {
+    setBorrowAmount(amount);
+    if (amount == "") amount = 0;
+
+    setExpectedBorrowRate(
+      await calculateExpectedBorrowInterestRate(asset, amount)
+    );
+  }
+
   async function borrowAssets(asset) {
     await borrow(asset, borrowAmount, parseInt(rateMode));
   }
 
-  async function repayLoan(asset) {
-    await repay(asset, repayAmount);
+  async function repayLoan(asset, repayingWholeLoan) {
+    await repay(asset, repayAmount, repayingWholeLoan);
   }
 
   return (
@@ -46,33 +60,51 @@ export default function BorrowPage() {
           <p>
             Total borrowed assets: {market.borrowedLiquidity} {market.asset}
           </p>
-          <p>
-            You have borrowed {market.userBorrowedLiquidity} {market.asset}
-          </p>
           {market.userBorrowedLiquidity > 0 && (
             <>
+              <p>
+                You have borrowed {market.userBorrowedLiquidity} {market.asset}
+              </p>
               <span>Enter the amount you wish to repay:</span>
               <input
+                value={repayAmount}
+                disabled={repayAmount === market.userRepayAmount}
                 type="number"
                 onInput={(e) =>
                   e.target.value === ""
                     ? setRepayAmount(null)
-                    : setRepayAmount(ethers.utils.parseEther(e.target.value))
+                    : setRepayAmount(e.target.value)
                 }
               />
               <br />
               <span>
-                Total repay amount: {market.userRepayAmount} {market.asset}
+                Repay whole loan ({market.userRepayAmount} {market.asset})?
               </span>
+              <input
+                type="checkbox"
+                onChange={(e) =>
+                  e.target.checked
+                    ? setRepayAmount(market.userRepayAmount)
+                    : setRepayAmount("")
+                }
+              />
               {repayAmount && (
-                <button onClick={() => repayLoan(market.asset)}>Repay</button>
+                <button
+                  onClick={() =>
+                    repayLoan(
+                      market.asset,
+                      repayAmount === market.userRepayAmount
+                    )
+                  }
+                >
+                  Repay
+                </button>
               )}
             </>
           )}
           <p>LTV (Loan To Value): {market.loanToValue}%</p>
           <p>Liquidation Threshold: {market.liquidationThreshold}%</p>
           <p>Liquidation Bonus: {market.liquidationBonus}%</p>
-          <p>This pools is {market.isActive ? "" : "not"} active</p>
           <p>
             Borrowing for this pool is {market.isBorrowingEnabled ? "" : "not "}
             enabled
@@ -86,7 +118,7 @@ export default function BorrowPage() {
           </span>
           <input
             type="number"
-            onInput={(e) => setBorrowAmount(parseFloat(e.target.value))}
+            onInput={(e) => onBorrowAmountChange(market.asset, e.target.value)}
           />
           <br />
           <span>Select your desired interest rate mode: </span>
@@ -99,6 +131,11 @@ export default function BorrowPage() {
             <option value="1">stable</option>
           </select>
           <br />
+          {expectedBorrowRate && (
+            <>
+              <p>Expected borrow rate: {expectedBorrowRate}%</p>
+            </>
+          )}
           {borrowAmount && rateMode && (
             <>
               <button onClick={() => borrowAssets(market.asset)}>Borrow</button>

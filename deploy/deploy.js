@@ -97,15 +97,15 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   await d.initPool(ethMock.address, "ETH", 18, 1);
   await d.initPool(usdcMock.address, "USDC", 18, 0);
 
-  //const di = new ethers.Contract(
-  //  diamond.address,
-  //  lp.abi,
-  //  (await ethers.getSigners())[0]
-  //);
+  const di = new ethers.Contract(
+    diamond.address,
+    lp.abi,
+    (await ethers.getSigners())[0]
+  );
 
-  //await di.deposit(ethMock.address, ethers.utils.parseEther("5"), false, {
-  //  value: ethers.utils.parseEther("5"),
-  //});
+  await di.deposit(ethMock.address, ethers.utils.parseEther("5"), false, {
+    value: ethers.utils.parseEther("5"),
+  });
 
   //const dia = new ethers.Contract(
   //  diamond.address,

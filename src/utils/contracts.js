@@ -79,9 +79,17 @@ function assignDisplayDataProperties(displayData, res) {
   displayData.userRepayAmount = ethers.utils.formatEther(res.userRepayAmount);
   displayData.isBorrowingEnabled = res.isBorrowingEnabled;
   displayData.isUsableAsCollateral = res.isUsableAsCollateral;
-  displayData.isActive = res.isActive;
 
   return displayData;
+}
+
+async function calculateExpectedBorrowInterestRate(asset, amount) {
+  return ethers.utils.formatEther(
+    await dpDiamond.calculateExpectedVariableBorrowRate(
+      assetToAddress[asset],
+      ethers.utils.parseEther(amount.toString())
+    )
+  );
 }
 
 async function getPoolDepositData(asset) {
@@ -127,9 +135,16 @@ async function borrow(asset, amount, rateMode) {
   );
 }
 
-async function repay(asset, amountInWei) {
-  await lpDiamond.repay(assetToAddress[asset], amountInWei, {
-    value: asset === "ETH" ? amountInWei : 0,
+async function repay(asset, amount, repayingWholeLoan) {
+  const amountInWei = ethers.utils.parseEther(amount),
+    paybackAmount =
+      asset === "ETH"
+        ? repayingWholeLoan
+          ? amountInWei.add(10 ** 13)
+          : amountInWei
+        : 0;
+  await lpDiamond.repay(assetToAddress[asset], paybackAmount, {
+    value: paybackAmount,
   });
 }
 
@@ -156,7 +171,18 @@ async function getUserGlobalData() {
   return ret;
 }
 
+async function test() {
+  const provider = new ethers.providers.JsonRpcProvider(
+    "http://127.0.0.1:8545"
+  );
+  await provider.send("evm_increaseTime", [60 * 60 * 24 * 365]);
+  console.log("skipped time");
+}
+
+//await test();
+
 export {
+  calculateExpectedBorrowInterestRate,
   getActivePoolsDisplayData,
   getAllActivePoolAssetNames,
   getPoolDepositData,

@@ -110,6 +110,26 @@ contract DataProvider {
         healthFactorBelowThreshold = healthFactor < 1e18;
     }
 
+    function calculateExpectedVariableBorrowRate(address _pool, uint256 _amount)
+        public
+        view
+        returns (uint256)
+    {
+        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
+        console.log(pool.providedLiquidity);
+        console.log(_amount);
+        (uint256 variableBorrowRate, ) = LendingPoolCore(address(this))
+            .calculateInterestRates(
+                pool.providedLiquidity - _amount,
+                pool.borrowedLiquidity + _amount,
+                pool.rates.interestRateSlopeBelow,
+                pool.rates.interestRateSlopeAbove,
+                pool.rates.baseVariableBorrowRate,
+                pool.rates.targetUtilisationRate
+            );
+        return variableBorrowRate / 10**7;
+    }
+
     function getUserPoolData(address _pool, address _user)
         public
         view

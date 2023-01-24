@@ -10,7 +10,7 @@ import {
 export default function LendingPage() {
   const [useAsCollateral, setUseAsCollateral] = useState(false);
   const [depositAmount, setDepositAmount] = useState(null);
-  const [redeemAmount, setRedeemAmount] = useState(null);
+  const [redeemAmount, setRedeemAmount] = useState("");
   const [yieldEstimate, setYieldEstimate] = useState(null);
   const [marketData, setMarketData] = useState(null);
   const [markets, setMarkets] = useState([]);
@@ -85,18 +85,24 @@ export default function LendingPage() {
             <>
               <span>Enter the amount you wish to redeem: </span>
               <input
+                value={redeemAmount}
+                disabled={redeemAmount === marketData.userMaxRedeemAmount}
                 type="number"
-                onInput={(e) =>
-                  e.target.value === ""
-                    ? setRedeemAmount(null)
-                    : setRedeemAmount(parseFloat(e.target.value))
-                }
+                onInput={(e) => setRedeemAmount(e.target.value)}
               />
               <br />
               <span>
-                Maximal amount to redeem: {marketData.userMaxRedeemAmount}{" "}
-                {marketData.asset}
+                Redeem maximal amount {marketData.userMaxRedeemAmount}{" "}
+                {marketData.asset}?
               </span>
+              <input
+                type="checkbox"
+                onChange={(e) =>
+                  e.target.checked
+                    ? setRedeemAmount(marketData.userMaxRedeemAmount)
+                    : setRedeemAmount("")
+                }
+              />
               <br />
               {redeemAmount && <button onClick={redeemDeposit}>Redeem</button>}
             </>
@@ -134,7 +140,10 @@ export default function LendingPage() {
               {useAsCollateral ? (
                 <br />
               ) : (
-                <p>Estimated yield after 1 year: {yieldEstimate}</p>
+                <p>
+                  Estimated yield after 1 year: {yieldEstimate}{" "}
+                  {marketData.asset}{" "}
+                </p>
               )}
               <button onClick={depositFunds}>Deposit</button>
             </>

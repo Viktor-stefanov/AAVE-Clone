@@ -92,6 +92,15 @@ async function calculateExpectedBorrowInterestRate(asset, amount) {
   );
 }
 
+async function getUserCollateralBalance(address) {
+  return ethers.utils.formatEther(
+    await dpDiamond.getUserCollateralAmount(
+      address,
+      await dpDiamond.signer.getAddress()
+    )
+  );
+}
+
 async function getPoolDepositData(asset) {
   const res = await dpDiamond.getPoolLendData(
     assetToAddress[asset],
@@ -171,22 +180,57 @@ async function getUserGlobalData() {
   return ret;
 }
 
-async function test() {
+async function getUserPoolData(address) {
+  const userData = await dpDiamond.getUserPoolData(
+    address,
+    await dpDiamond.signer.getAddress()
+  );
+  return {
+    compoundedBorrowBalance: userData.currentBorrowBalance,
+  };
+}
+
+async function skipOneYear() {
   const provider = new ethers.providers.JsonRpcProvider(
     "http://127.0.0.1:8545"
   );
   await provider.send("evm_increaseTime", [60 * 60 * 24 * 365]);
   console.log("skipped time");
 }
+async function getMaxAmountToRepayOnLiquidation(pool, userToLiquidate) {
+  return ethers.utils.formatEther(
+    await dpDiamond.getMaxAmountToRepayOnLiquidation(pool, userToLiquidate)
+  );
+}
 
-//await test();
+async function getRepayAndCollateralOnLiquidation(
+  pool,
+  collateral,
+  userCollateralBalance
+) {
+  console.log(pool, collateral, userCollateralBalance);
+  return ethers.utils.formatEther(
+    await dpDiamond.calculateAvailableCollateralToLiquidate(
+      pool,
+      collateral,
+      ethers.utils.parseEther("100"),
+      ethers.utils.parseEther(userCollateralBalance.toString())
+    )
+  );
+}
+
+//await skipOneYear();
 
 export {
+  getRepayAndCollateralOnLiquidation,
   calculateExpectedBorrowInterestRate,
+  getMaxAmountToRepayOnLiquidation,
   getActivePoolsDisplayData,
   getAllActivePoolAssetNames,
+  getUserCollateralBalance,
   getPoolDepositData,
   getUserGlobalData,
+  getUserPoolData,
   deposit,
   borrow,
   repay,

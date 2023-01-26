@@ -138,6 +138,94 @@ contract LendingPoolCore {
         updatePoolInterestRates(pool, _paybackAmountMinusFee, 0);
     }
 
+    function updateStateOnLiquidationCall(
+        address _pool,
+        address _collateral,
+        address _user,
+        uint256 _principalAmountToRepay,
+        uint256 _feeRepayed,
+        uint256 _collateralAmountToLiquidate,
+        uint256 _balanceIncrease
+    ) public {
+        LibFacet.Pool storage principalPool = LibFacet.lpcStorage().pools[
+            _pool
+        ];
+        LibFacet.Pool storage collateralPool = LibFacet.lpcStorage().pools[
+            _collateral
+        ];
+
+        updatePrincipalPoolStateOnLiquidationCall(
+            principalPool,
+            principalPool.users[_user],
+            _principalAmountToRepay,
+            _balanceIncrease
+        );
+        updateCumulativeIndexes(collateralPool);
+        updateUserStateOnLiquidationCall(
+            principalPool,
+            principalPool.users[_user],
+            _principalAmountToRepay,
+            _feeRepayed,
+            _balanceIncrease
+        );
+        updatePoolInterestRates(principalPool, _principalAmountToRepay, 0);
+        updatePoolInterestRates(
+            collateralPool,
+            0,
+            _collateralAmountToLiquidate
+        );
+    }
+
+    function updateUserStateOnLiquidationCall(
+        LibFacet.Pool storage _pool,
+        LibFacet.UserPoolData storage _user,
+        uint256 _amountRepayed,
+        uint256 _feeLiquidated,
+        uint256 _balanceIncrease
+    ) internal {
+        _user.principalBorrowBalance =
+            _user.principalBorrowBalance +
+            _balanceIncrease -
+            _amountRepayed;
+        _user.originationFee -= _feeLiquidated;
+        if (_user.rates.rateMode == LibFacet.InterestRateMode.VARIABLE)
+            _user.cumulatedVariableBorrowIndex = _pool
+                .cumulatedVariableBorrowIndex;
+        _user.lastUpdatedTimestamp = block.timestamp;
+    }
+
+    function updatePrincipalPoolStateOnLiquidationCall(
+        LibFacet.Pool storage _pool,
+        LibFacet.UserPoolData storage _user,
+        uint256 _amountToRepay,
+        uint256 _balanceIncrease
+    ) internal {
+        updateCumulativeIndexes(_pool);
+        if (
+            _user.rates.rateMode == LibFacet.InterestRateMode.STABLE
+        ) {} else if (
+            _user.rates.rateMode == LibFacet.InterestRateMode.VARIABLE
+        ) {
+            increaseTotalVariableBorrows(_pool, _balanceIncrease);
+            decreaseTotalVariableBorrows(_pool, _amountToRepay);
+        }
+    }
+
+    function updatePoolStateOnLiquidationCall(
+        LibFacet.Pool storage _pool,
+        uint256 _amount,
+        uint256 _balanceIncrease,
+        LibFacet.InterestRateMode _interestMode
+    ) internal {
+        updateCumulativeIndexes(_pool);
+        _pool.providedLiquidity += _balanceIncrease;
+        if (_interestMode == LibFacet.InterestRateMode.STABLE) {} else if (
+            _interestMode == LibFacet.InterestRateMode.VARIABLE
+        ) {
+            decreaseTotalVariableBorrows(_pool, _amount);
+        }
+    }
+
     function updatePoolStateOnRepay(
         LibFacet.Pool storage _pool,
         address _poolAddress,
@@ -381,6 +469,14 @@ contract LendingPoolCore {
         );
 
         return weightedVariableRate.rayDiv(totalBorrows.wadToRay());
+    }
+
+    function getPoolLiquidationBonus(address _pool)
+        public
+        view
+        returns (uint256)
+    {
+        return LibFacet.lpcStorage().pools[_pool].liquidationBonus;
     }
 
     function getUserBorrowBalances(address _pool, address _user)
@@ -655,6 +751,21 @@ contract LendingPoolCore {
                 LibFacet.lpcStorage().pools[_pool].rewardsLiquidity
             ) +
             LibFacet.lpcStorage().pools[_pool].users[_user].liquidityProvided;
+    }
+
+    function getUserCollateralBalance(address _pool, address _user)
+        public
+        view
+        returns (uint256)
+    {
+        return
+            LibFacet.lpcStorage().pools[_pool].users[_user].useAsCollateral
+                ? LibFacet
+                    .lpcStorage()
+                    .pools[_pool]
+                    .users[_user]
+                    .liquidityProvided
+                : 0;
     }
 
     function getPoolCumulatedRewards(address _pool)

@@ -29,7 +29,6 @@ contract LendingPool {
 
     function redeem(address _pool, uint256 _amount) external {
         LendingPoolCore core = LendingPoolCore(address(this));
-        LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
         require(
             core.getPoolAvailableLiquidity(_pool) >= _amount,
             "There is not enough liquidity available to redeem."
@@ -231,29 +230,108 @@ contract LendingPool {
         );
     }
 
+    struct liquidationCallLocalVars {
+        uint256 userCollateralBalance;
+        uint256 compoundedBalance;
+        uint256 balanceIncrease;
+        uint256 maxAmountToRepay;
+        uint256 actualAmountToRepay;
+        uint256 maxCollateralToLiquidate;
+        uint256 principalAmountNeeded;
+        uint256 originationFee;
+        uint256 feeCollateralToLiquidate;
+        uint256 feePrincipalAmountNeeded;
+        bool healthFactorBelowThreshold;
+    }
+
     function liquidationCall(
         address _pool,
         address _collateral,
-        address _userToLiquidate
+        address _userToLiquidate,
+        uint256 _purchaseAmount
     ) external payable {
-        (, , , , , , , bool healthFactorBelowThreshold) = DataProvider(
-            address(this)
-        ).getUserGlobalData(_userToLiquidate);
-        require(healthFactorBelowThreshold, "User cannot be liquidated.");
-        require(
-            LibFacet
-                .lpcStorage()
-                .pools[_collateral]
-                .users[_userToLiquidate]
-                .useAsCollateral &&
-                LibFacet
-                    .lpcStorage()
-                    .pools[_collateral]
-                    .users[_userToLiquidate]
-                    .liquidityProvided >
-                0,
-            "User has not used the given asset as collateral."
+        LendingPoolCore core = LendingPoolCore(address(this));
+        liquidationCallLocalVars memory vars;
+        /// @TODO: uncomment after testing
+        //(, , , , , , , vars.healthFactorBelowThreshold) = DataProvider(
+        //    address(this)
+        //).getUserGlobalData(_userToLiquidate);
+        //require(vars.healthFactorBelowThreshold, "User cannot be liquidated.");
+
+        vars.userCollateralBalance = core.getUserCollateralBalance(
+            _collateral,
+            _userToLiquidate
         );
-        /// calculate the maximum amount that can be liquidated
+        require(
+            vars.userCollateralBalance > 0,
+            "User has not provided collateral in the desired currency."
+        );
+
+        (, vars.compoundedBalance, vars.balanceIncrease) = core
+            .getUserBorrowBalances(_pool, _userToLiquidate);
+        require(
+            vars.compoundedBalance > 0,
+            "User has not gotten a loan in this pool's currency."
+        );
+
+        vars.maxAmountToRepay = vars.compoundedBalance / 2;
+        vars.actualAmountToRepay = _purchaseAmount > vars.maxAmountToRepay
+            ? vars.maxAmountToRepay
+            : _purchaseAmount;
+
+        (
+            vars.maxCollateralToLiquidate,
+            vars.principalAmountNeeded
+        ) = DataProvider(address(this)).calculateAvailableCollateralToLiquidate(
+            _collateral,
+            _pool,
+            vars.actualAmountToRepay,
+            vars.userCollateralBalance
+        );
+
+        vars.actualAmountToRepay = vars.principalAmountNeeded <
+            vars.actualAmountToRepay
+            ? vars.principalAmountNeeded
+            : vars.actualAmountToRepay;
+
+        vars.originationFee = core.getUserOriginationFee(
+            _pool,
+            _userToLiquidate
+        );
+        if (vars.originationFee > 0) {
+            (
+                vars.feeCollateralToLiquidate,
+                vars.feePrincipalAmountNeeded
+            ) = DataProvider(address(this))
+                .calculateAvailableCollateralToLiquidate(
+                    _collateral,
+                    _pool,
+                    vars.originationFee,
+                    vars.userCollateralBalance - vars.originationFee
+                );
+        }
+
+        core.updateStateOnLiquidationCall(
+            _pool,
+            _collateral,
+            _userToLiquidate,
+            vars.actualAmountToRepay,
+            vars.feePrincipalAmountNeeded,
+            vars.maxCollateralToLiquidate,
+            vars.balanceIncrease
+        );
+
+        core.transferToUser(
+            _collateral,
+            msg.sender,
+            vars.maxCollateralToLiquidate
+        );
+        core.transferToPool(_pool, msg.sender, vars.actualAmountToRepay);
+        if (vars.originationFee > 0)
+            core.transferToFeeCollector(
+                _pool,
+                msg.sender,
+                vars.feePrincipalAmountNeeded
+            );
     }
 }

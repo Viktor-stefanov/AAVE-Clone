@@ -16,7 +16,6 @@ export default function AuthProvider({ children }) {
   }, []);
 
   async function storeWalletData() {
-    console.log("on change fired");
     const newWalletData = Wallet.getData();
     localStorage.setItem("walletData", JSON.stringify(newWalletData));
     setWalletData(newWalletData);

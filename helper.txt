@@ -1,20 +1,17 @@
-5 ETH deposit. 2.5 ETH borrow.
-optimal utilization rate = 65%
-seconds in a year = 31556926
+user collateral = 5000 USDC = 5000 * 10**18
+purchase amount = user collateral / 2 = 2500 USDC = 2500 * 10**18
 
-utilizationRate = 2.5 / 5 = 0.5 = 50%
-variable borrow rate = (0.5 / 0.65) * 8 = 0.769230769 * 8 = 6.15384615
-! The variable borrow rate is the borrow interest = 6.15%
+max amount collateral to liquidate = 1500 * (2500 * 10**18) / 1 * 50 / 100 = 1.87500e24 = 1875000 USDC??????
+1.8 million USDC? :D
 
-current liquidity rate = 3.07692307%
-? I have no idea what this rate represents
-! The documentation says that this is the deposit APY
+how to calculate the collateral's worth based on the principal currency's amount
+collateral =  5000 USDC
+loan = 2.5 ETH
 
+if _purchaseAmount = uint256.max() then it will be set to 2.5 / 2 = 1.25 ETH
+How much USDC does 1.25 ETH equals?
 
-5 ETH deposit : 4 ETH borrow
-
-utilization rate = 4 / 5 = 0.8
-variable borrow rate = 8 + ((0.8 - 0.65) / (1 - 0.65)) * 100 = 50.8571429%
-! borrow interest rate rises sharply with over utilization
-
-current liquidity rate = 40.6857143
+1.25 ETH = 1875 USDC
+calculation: multiply 1.25 by ETH's price (1500) = 1875 then divide by USDC's price: 1875 / 1 = 1875 then add 5% to that amount.
+1875 + (1875 * 5 / 100)
+Opposite calculation: 1500 USDC to ETH: (1500 * 1) / 1500 then subtract 5% to 1: 1 + (1 * 5 / 100)

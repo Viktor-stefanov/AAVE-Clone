@@ -116,8 +116,6 @@ contract DataProvider {
         returns (uint256)
     {
         LibFacet.Pool storage pool = LibFacet.lpcStorage().pools[_pool];
-        console.log(pool.providedLiquidity);
-        console.log(_amount);
         (uint256 variableBorrowRate, ) = LendingPoolCore(address(this))
             .calculateInterestRates(
                 pool.providedLiquidity - _amount,
@@ -342,5 +340,66 @@ contract DataProvider {
                 _userCurrentFeesETH +
                 requestedBorrowAmountETH) * 100) /
             _userCurrentLTV;
+    }
+
+    function getPoolAmountInETH(address _pool, uint256 _amount)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 decimals = LendingPoolCore(address(this)).getPoolDecimals(
+            _pool
+        );
+        return
+            (LibFacet.getPriceFeed().getAssetPrice(_pool) * _amount) /
+            (10**decimals);
+    }
+
+    function getMaxAmountToRepayOnLiquidation(
+        address _pool,
+        address _userToLiquidate
+    ) public view returns (uint256 maxPrincipalAmount) {
+        (, uint256 compoundedBorrowBalance, ) = LendingPoolCore(address(this))
+            .getUserBorrowBalances(_pool, _userToLiquidate);
+        return compoundedBorrowBalance / 2;
+    }
+
+    function calculateAvailableCollateralToLiquidate(
+        address _collateral,
+        address _principal,
+        uint256 _purchaseAmount,
+        uint256 _userCollateralBalance
+    ) public view returns (uint256 collateralAmount, uint256 principalAmount) {
+        PriceFeed pf = LibFacet.getPriceFeed();
+        uint256 principalPrice = pf.getAssetPrice(_principal);
+        uint256 collateralPrice = pf.getAssetPrice(_collateral);
+        uint256 liquidationBonus = LendingPoolCore(address(this))
+            .getPoolLiquidationBonus(_collateral);
+        uint256 maxCollateralToLiquidate = ((_purchaseAmount * principalPrice) /
+            collateralPrice);
+        maxCollateralToLiquidate +=
+            (maxCollateralToLiquidate * liquidationBonus) /
+            100;
+        if (maxCollateralToLiquidate > _userCollateralBalance) {
+            collateralAmount = _userCollateralBalance;
+            principalAmount = ((collateralAmount * collateralPrice) /
+                principalPrice);
+            principalAmount -= (principalAmount * liquidationBonus) / 100;
+        } else {
+            collateralAmount = maxCollateralToLiquidate;
+            principalAmount = _purchaseAmount;
+        }
+    }
+
+    function getUserCollateralAmount(address _pool, address _user)
+        public
+        view
+        returns (uint256)
+    {
+        return
+            LendingPoolCore(address(this)).getUserCollateralBalance(
+                _pool,
+                _user
+            );
     }
 }

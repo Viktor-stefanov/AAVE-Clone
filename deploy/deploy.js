@@ -5,7 +5,7 @@ const { ethers } = require("hardhat");
 
 module.exports = async ({ getNamedAccounts, deployments }) => {
   const { deploy } = deployments;
-  const { deployer } = await getNamedAccounts();
+  const { deployer, deployer2 } = await getNamedAccounts();
 
   const lp = await deploy("LendingPool", { from: deployer, log: true }),
     lpc = await deploy("LendingPoolCore", { from: deployer, log: true }),
@@ -31,9 +31,9 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
       log: true,
     }),
     usdcMock = await deploy("UsdcMock", {
-      from: deployer,
+      from: (await ethers.getSigners())[1].address,
       log: true,
-      args: ["0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199"], //(await ethers.getSigners())[1].address],
+      args: [(await ethers.getSigners())[1].address],
     });
 
   const p = new ethers.Contract(pf.address, pf.abi, await ethers.getSigner());
@@ -106,6 +106,31 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
   await di.deposit(ethMock.address, ethers.utils.parseEther("5"), false, {
     value: ethers.utils.parseEther("5"),
   });
+
+  const dia = new ethers.Contract(
+    diamond.address,
+    lp.abi,
+    (await ethers.getSigners())[1]
+  );
+
+  const usdcContract = new ethers.Contract(
+    usdcMock.address,
+    usdcMock.abi,
+    (await ethers.getSigners())[1]
+  );
+  await usdcContract.approve(dia.address, ethers.utils.parseEther("5000"));
+  await dia.deposit(usdcMock.address, ethers.utils.parseEther("5000"), true);
+  await dia.borrow(ethMock.address, ethers.utils.parseEther("2.5"), 0);
+
+  await di.liquidationCall(
+    ethMock.address,
+    usdcMock.address,
+    (
+      await ethers.getSigners()
+    )[1].address,
+    ethers.utils.parseEther("100"),
+    { value: ethers.utils.parseEther("100") }
+  );
 
   //const dia = new ethers.Contract(
   //  diamond.address,

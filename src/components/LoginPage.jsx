@@ -9,7 +9,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (walletData.walletConnected) navigate("/");
-  }, []);
+  }, [walletData.walletConnected]);
 
   async function handleLogin() {
     setLoggingIn(true);

@@ -8,11 +8,21 @@ export default function AuthProvider({ children }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const wd = localStorage.getItem("walletData");
-    setWalletData(JSON.parse(wd));
-    localStorage.setItem("walletData", wd ? wd : "{}");
-    if (JSON.parse(wd).chainId === 31337)
-      document.dispatchEvent(new Event("onCorrectNetwork"));
+    async function inner() {
+      if (await Wallet.isLoggedIn()) {
+        const wd = localStorage.getItem("walletData");
+        Wallet.setData(JSON.parse(wd));
+        setWalletData(JSON.parse(wd));
+        localStorage.setItem("walletData", wd ? wd : "{}");
+        if (JSON.parse(wd).chainId === 31337)
+          document.dispatchEvent(new Event("onCorrectNetwork"));
+        window.ethereum.on("change", () => storeWalletData());
+      } else {
+        setWalletData({});
+        localStorage.setItem("walletData", "{}");
+      }
+    }
+    inner();
   }, []);
 
   async function storeWalletData() {
@@ -25,7 +35,6 @@ export default function AuthProvider({ children }) {
 
   async function onLogin() {
     if (await Wallet.connectWallet()) {
-      window.ethereum.on("change", () => storeWalletData());
       storeWalletData();
       navigate("/");
     }

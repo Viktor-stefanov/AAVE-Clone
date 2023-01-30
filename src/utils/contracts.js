@@ -16,7 +16,10 @@ document.addEventListener(
 );
 
 async function instantiateContracts() {
-  const web3Provider = new ethers.providers.Web3Provider(window.ethereum),
+  const web3Provider = new ethers.providers.Web3Provider(
+      window.ethereum,
+      "any"
+    ),
     signer = web3Provider.getSigner(),
     ethMock = new ethers.Contract(ethMockJson.address, ethMockJson.abi, signer),
     usdcMock = new ethers.Contract(

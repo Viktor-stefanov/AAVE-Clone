@@ -23,26 +23,7 @@ export default {
           await provider.getBalance(this.account)
         );
 
-        window.ethereum.on("accountsChanged", async (accounts) => {
-          console.log("ACCOUNTS ARE BEING CHANGED");
-          this.accounts = accounts;
-          this.account = accounts[0];
-          this.balance = ethers.utils.formatEther(
-            await provider.getBalance(this.account)
-          );
-
-          window.ethereum.emit("change");
-        });
-
-        window.ethereum.on("chainChanged", async (chainId) => {
-          this.balance = ethers.utils.formatEther(
-            await provider.getBalance(this.account)
-          );
-          this.chainId = parseInt(chainId, 16);
-
-          window.ethereum.emit("change");
-        });
-
+        await this.addEventListeners(provider);
         return true;
       } catch (err) {
         console.log(err);
@@ -51,7 +32,51 @@ export default {
     } else return false;
   },
 
-  getData: function getData() {
+  addEventListeners: async function (provider) {
+    window.ethereum.on("accountsChanged", async (accounts) => {
+      this.accounts = accounts;
+      this.account = accounts[0];
+      this.balance = ethers.utils.formatEther(
+        await provider.getBalance(this.account)
+      );
+
+      window.ethereum.emit("change");
+    });
+
+    window.ethereum.on("chainChanged", async (chainId) => {
+      this.balance = ethers.utils.formatEther(
+        await provider.getBalance(this.account)
+      );
+      this.chainId = parseInt(chainId, 16);
+
+      window.ethereum.emit("change");
+    });
+  },
+
+  isLoggedIn: async function () {
+    if (window.ethereum) {
+      const provider = new ethers.providers.Web3Provider(
+        window.ethereum,
+        "any"
+      );
+      if ((await provider.listAccounts()).length > 0) {
+        await this.addEventListeners(provider);
+        return true;
+      }
+      return false;
+    }
+    return false;
+  },
+
+  setData: function (other) {
+    this.chainId = other.chainId;
+    this.account = other.account;
+    this.accounts = other.accounts;
+    this.balance = other.balance;
+    this.walletConnected = other.walletConnected;
+  },
+
+  getData: function () {
     return {
       chainId: this.chainId,
       account: this.account,

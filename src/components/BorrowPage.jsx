@@ -13,6 +13,7 @@ export default function BorrowPage() {
   const [repayAmount, setRepayAmount] = useState("");
   const [rateMode, setRateMode] = useState(null);
   const [markets, setMarkets] = useState([]);
+  const [chosenMarket, setChosenMarket] = useState(null);
 
   useEffect(() => {
     async function test() {
@@ -22,6 +23,7 @@ export default function BorrowPage() {
   }, []);
 
   async function onBorrowAmountChange(asset, amount) {
+    setChosenMarket(asset);
     setBorrowAmount(amount);
     if (amount == "") amount = 0;
 
@@ -131,12 +133,12 @@ export default function BorrowPage() {
             <option value="1">stable</option>
           </select>
           <br />
-          {expectedBorrowRate && (
+          {expectedBorrowRate && chosenMarket === market.asset && (
             <>
-              <p>Expected borrow rate: {expectedBorrowRate}%</p>
+              <p>Expected borrow interest rate: {expectedBorrowRate}%</p>
             </>
           )}
-          {borrowAmount && rateMode && (
+          {borrowAmount && rateMode && chosenMarket === market.asset && (
             <>
               <button onClick={() => borrowAssets(market.asset)}>Borrow</button>
             </>

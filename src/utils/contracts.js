@@ -208,18 +208,30 @@ async function getRepayAndCollateralOnLiquidation(
   collateral,
   userCollateralBalance
 ) {
-  console.log(pool, collateral, userCollateralBalance);
-  return ethers.utils.formatEther(
+  return (
     await dpDiamond.calculateAvailableCollateralToLiquidate(
       pool,
       collateral,
-      ethers.utils.parseEther("100"),
+      ethers.utils.parseEther("1000000"),
       ethers.utils.parseEther(userCollateralBalance.toString())
     )
-  );
+  ).map((val) => ethers.utils.formatEther(val.toString()) / 2);
 }
 
-//await skipOneYear();
+async function liquidationCall(pool, collateral, userToLiquidate, amount) {
+  await lpDiamond.liquidationCall(
+    pool,
+    collateral,
+    userToLiquidate,
+    ethers.utils.parseEther(amount.toString()),
+    {
+      value:
+        pool === ethMock.address
+          ? ethers.utils.parseEther(amount.toString())
+          : 0,
+    }
+  );
+}
 
 export {
   getRepayAndCollateralOnLiquidation,
@@ -231,6 +243,7 @@ export {
   getPoolDepositData,
   getUserGlobalData,
   getUserPoolData,
+  liquidationCall,
   deposit,
   borrow,
   repay,

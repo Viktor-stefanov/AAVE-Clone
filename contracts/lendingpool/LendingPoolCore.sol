@@ -163,10 +163,12 @@ contract LendingPoolCore {
         updateCumulativeIndexes(collateralPool);
         updateUserStateOnLiquidationCall(
             principalPool,
-            principalPool.users[_user],
+            collateralPool,
+            _user,
             _principalAmountToRepay,
             _feeRepayed,
-            _balanceIncrease
+            _balanceIncrease,
+            _collateralAmountToLiquidate
         );
         updatePoolInterestRates(principalPool, _principalAmountToRepay, 0);
         updatePoolInterestRates(
@@ -178,20 +180,25 @@ contract LendingPoolCore {
 
     function updateUserStateOnLiquidationCall(
         LibFacet.Pool storage _pool,
-        LibFacet.UserPoolData storage _user,
+        LibFacet.Pool storage _collateral,
+        address _user,
         uint256 _amountRepayed,
         uint256 _feeLiquidated,
-        uint256 _balanceIncrease
+        uint256 _balanceIncrease,
+        uint256 _collateralToLiquidate
     ) internal {
-        _user.principalBorrowBalance =
-            _user.principalBorrowBalance +
-            _balanceIncrease -
-            _amountRepayed;
-        _user.originationFee -= _feeLiquidated;
-        if (_user.rates.rateMode == LibFacet.InterestRateMode.VARIABLE)
-            _user.cumulatedVariableBorrowIndex = _pool
+        _collateral.users[_user].liquidityProvided -= _collateralToLiquidate;
+        _pool.users[_user].principalBorrowBalance -=
+            _amountRepayed -
+            _balanceIncrease;
+        _pool.users[_user].originationFee -= _feeLiquidated;
+        if (
+            _pool.users[_user].rates.rateMode ==
+            LibFacet.InterestRateMode.VARIABLE
+        )
+            _pool.users[_user].cumulatedVariableBorrowIndex = _pool
                 .cumulatedVariableBorrowIndex;
-        _user.lastUpdatedTimestamp = block.timestamp;
+        _pool.users[_user].lastUpdatedTimestamp = block.timestamp;
     }
 
     function updatePrincipalPoolStateOnLiquidationCall(
@@ -200,6 +207,10 @@ contract LendingPoolCore {
         uint256 _amountToRepay,
         uint256 _balanceIncrease
     ) internal {
+        console.log(_pool.borrowedLiquidity);
+        console.log(_amountToRepay);
+        console.log(_balanceIncrease);
+        _pool.borrowedLiquidity -= _amountToRepay - _balanceIncrease;
         updateCumulativeIndexes(_pool);
         if (
             _user.rates.rateMode == LibFacet.InterestRateMode.STABLE

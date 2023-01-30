@@ -283,8 +283,8 @@ contract LendingPool {
             vars.maxCollateralToLiquidate,
             vars.principalAmountNeeded
         ) = DataProvider(address(this)).calculateAvailableCollateralToLiquidate(
-            _collateral,
             _pool,
+            _collateral,
             vars.actualAmountToRepay,
             vars.userCollateralBalance
         );

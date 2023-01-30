@@ -365,8 +365,8 @@ contract DataProvider {
     }
 
     function calculateAvailableCollateralToLiquidate(
-        address _collateral,
         address _principal,
+        address _collateral,
         uint256 _purchaseAmount,
         uint256 _userCollateralBalance
     ) public view returns (uint256 collateralAmount, uint256 principalAmount) {

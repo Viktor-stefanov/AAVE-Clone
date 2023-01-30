@@ -6,15 +6,16 @@ import {
   getUserCollateralBalance,
   getUserGlobalData,
   getUserPoolData,
+  liquidationCall,
 } from "../utils/contracts";
 
 export default function Profile() {
   const [userData, setUserData] = useState([]);
-  const [poolToRepay, setPoolToRepay] = useState("");
+  const [poolToRepay, setPoolToRepay] = useState(null);
   const [userBorrowBalance, setUserBorrowBalance] = useState(null);
-  const [userToLiquidate, setUserToLiquidate] = useState("");
+  const [userToLiquidate, setUserToLiquidate] = useState(null);
   const [userCollateralBalance, setUserCollateralBalance] = useState(null);
-  const [poolToLiquidate, setPoolToLiquidate] = useState("");
+  const [poolToLiquidate, setPoolToLiquidate] = useState(null);
   const [maxAmountToRepay, setMaxAmountToRepay] = useState(null);
   const [collateralToReceive, setCollateralToReceive] = useState(null);
 
@@ -45,18 +46,25 @@ export default function Profile() {
       ? await getUserCollateralBalance(address)
       : null;
     setUserCollateralBalance(collateralBalance);
-    const [maxAmountToRepay, collateralToReceive] = isValidAddress
+    const [collateralToReceive, maxAmountToRepay] = isValidAddress
       ? await getRepayAndCollateralOnLiquidation(
           poolToRepay,
-          userToLiquidate,
+          address,
           collateralBalance
         )
-      : null;
+      : [null, null];
     setMaxAmountToRepay(maxAmountToRepay);
     setCollateralToReceive(collateralToReceive);
   }
 
-  async function liquidateUser() {}
+  async function liquidateUser() {
+    await liquidationCall(
+      poolToRepay,
+      poolToLiquidate,
+      userToLiquidate,
+      maxAmountToRepay
+    );
+  }
 
   return (
     <>
@@ -90,13 +98,15 @@ export default function Profile() {
       <span>Enter the address of the collateral market: </span>
       <input
         type="text"
-        disabled={!userToLiquidate && !poolToRepay}
+        disabled={!userToLiquidate || !poolToRepay}
         onInput={(e) => onPoolToLiquidateInput(e.target.value)}
       />
-      {userCollateralBalance > 0 && userBorrowBalance > 0 && (
+      {maxAmountToRepay && collateralToReceive && (
         <>
           <p>You can liquidate a maximum amount of: {maxAmountToRepay}</p>
-          <p>You will receive {collateralToReceive} </p>
+          <p>
+            You will receive {collateralToReceive} for {maxAmountToRepay}
+          </p>
           <button onClick={liquidateUser}>Liquidate User</button>
         </>
       )}

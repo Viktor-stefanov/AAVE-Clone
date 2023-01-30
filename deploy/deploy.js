@@ -33,7 +33,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     usdcMock = await deploy("UsdcMock", {
       from: (await ethers.getSigners())[1].address,
       log: true,
-      args: [(await ethers.getSigners())[1].address],
+      args: ["0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199"],
     });
 
   const p = new ethers.Contract(pf.address, pf.abi, await ethers.getSigner());
@@ -107,30 +107,30 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     value: ethers.utils.parseEther("5"),
   });
 
-  const dia = new ethers.Contract(
-    diamond.address,
-    lp.abi,
-    (await ethers.getSigners())[1]
-  );
+  //const dia = new ethers.Contract(
+  //  diamond.address,
+  //  lp.abi,
+  //  (await ethers.getSigners())[1]
+  //);
 
-  const usdcContract = new ethers.Contract(
-    usdcMock.address,
-    usdcMock.abi,
-    (await ethers.getSigners())[1]
-  );
-  await usdcContract.approve(dia.address, ethers.utils.parseEther("5000"));
-  await dia.deposit(usdcMock.address, ethers.utils.parseEther("5000"), true);
-  await dia.borrow(ethMock.address, ethers.utils.parseEther("2.5"), 0);
+  //const usdcContract = new ethers.Contract(
+  //  usdcMock.address,
+  //  usdcMock.abi,
+  //  (await ethers.getSigners())[1]
+  //);
+  //await usdcContract.approve(dia.address, ethers.utils.parseEther("5000"));
+  //await dia.deposit(usdcMock.address, ethers.utils.parseEther("5000"), true);
+  //await dia.borrow(ethMock.address, ethers.utils.parseEther("2.5"), 0);
 
-  await di.liquidationCall(
-    ethMock.address,
-    usdcMock.address,
-    (
-      await ethers.getSigners()
-    )[1].address,
-    ethers.utils.parseEther("100"),
-    { value: ethers.utils.parseEther("100") }
-  );
+  //await di.liquidationCall(
+  //  ethMock.address,
+  //  usdcMock.address,
+  //  (
+  //    await ethers.getSigners()
+  //  )[1].address,
+  //  ethers.utils.parseEther("100"),
+  //  { value: ethers.utils.parseEther("100") }
+  //);
 
   //const dia = new ethers.Contract(
   //  diamond.address,
